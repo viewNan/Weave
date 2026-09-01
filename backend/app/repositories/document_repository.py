@@ -64,10 +64,10 @@ class DocumentRepository:
         row = self.conn.execute(
             """
             insert into document_versions (
-                id, workspace_id, owner_id, project_id, document_id,
+                id, workspace_id, owner_id, project_id, document_id, created_by,
                 version_number, content, storage_path, source_path, metadata
             )
-            values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             returning *
             """,
             (
@@ -76,6 +76,7 @@ class DocumentRepository:
                 owner_id,
                 project_id,
                 document_id,
+                owner_id,
                 version_number,
                 content,
                 storage_path,
