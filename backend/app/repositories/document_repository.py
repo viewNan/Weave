@@ -55,7 +55,8 @@ class DocumentRepository:
         project_id: UUID | None,
         document_id: UUID,
         content: str,
-        source_path: str | None,
+        storage_path: str | None = None,
+        source_path: str | None = None,
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
         version_number = self.next_version_number(document_id)
@@ -64,7 +65,7 @@ class DocumentRepository:
             """
             insert into document_versions (
                 id, workspace_id, owner_id, project_id, document_id,
-                version_number, content, source_path, metadata
+                version_number, content, storage_path, source_path, metadata
             )
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             returning *
@@ -77,6 +78,7 @@ class DocumentRepository:
                 document_id,
                 version_number,
                 content,
+                storage_path,
                 source_path,
                 Jsonb(metadata),
             ),
@@ -145,6 +147,61 @@ class DocumentRepository:
         result = dict(document)
         result["current_version"] = dict(version) if version else None
         return result
+
+    def update_document(self, document_id: UUID, fields: dict[str, Any]) -> None:
+        if not fields:
+            return
+        assignments = ", ".join(f"{key} = %s" for key in fields)
+        self.conn.execute(
+            f"update documents set {assignments} where id = %s",
+            [*fields.values(), document_id],
+        )
+
+    def find_document_by_title(self, *, workspace_id: UUID, title: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            "select id from documents where workspace_id = %s and title = %s order by updated_at desc limit 1",
+            (workspace_id, title),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_versions(self, document_id: UUID) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "select * from document_versions where document_id = %s order by version_number desc",
+            (document_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_documents(self, *, workspace_id: UUID, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            select d.*, v.version_number, v.content, v.storage_path, v.source_path,
+                   v.metadata as version_metadata, v.created_at as version_created_at
+            from documents d
+            left join document_versions v on v.id = d.current_version_id
+            where d.workspace_id = %s
+            order by d.updated_at desc
+            limit %s
+            """,
+            (workspace_id, limit),
+        ).fetchall()
+        documents = []
+        for row in rows:
+            item = dict(row)
+            if item["current_version_id"] is not None:
+                item["current_version"] = {
+                    "id": item["current_version_id"],
+                    "document_id": item["id"],
+                    "version_number": item.pop("version_number"),
+                    "content": item.pop("content"),
+                    "storage_path": item.pop("storage_path"),
+                    "source_path": item.pop("source_path"),
+                    "metadata": item.pop("version_metadata"),
+                    "created_at": item.pop("version_created_at"),
+                }
+            else:
+                item["current_version"] = None
+            documents.append(item)
+        return documents
 
     def search_chunks(
         self,

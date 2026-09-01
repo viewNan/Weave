@@ -15,11 +15,23 @@ class DocumentCreate(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class DocumentUpdate(BaseModel):
+    title: str | None = None
+    document_type: str | None = None
+    source_url: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class DocumentContentUpdate(BaseModel):
+    content: str = Field(min_length=1)
+
+
 class DocumentVersion(BaseModel):
     id: UUID
     document_id: UUID
     version_number: int
     content: str
+    storage_path: str | None = None
     source_path: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime

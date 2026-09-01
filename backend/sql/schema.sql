@@ -45,12 +45,15 @@ create table if not exists document_versions (
     document_id uuid not null references documents(id) on delete cascade,
     version_number integer not null,
     content text not null,
+    storage_path text,
     source_path text,
     metadata jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     unique (document_id, version_number)
 );
+
+alter table document_versions add column if not exists storage_path text;
 
 do $$
 begin

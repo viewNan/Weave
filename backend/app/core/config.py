@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     default_workspace_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     default_owner_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
     default_project_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
+    file_storage_dir: str = "storage"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
