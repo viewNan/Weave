@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "name": "weave-frontend",
   "private": true,
@@ -18,3 +19,33 @@
     "typescript": "^5.7.2"
   }
 }
+=======
+{
+  "name": "weave-personal-planet",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack --hostname 127.0.0.1",
+    "build": "next build --webpack",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/world.test.ts"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.0",
+    "@react-three/fiber": "^9.3.0",
+    "next": "^16.3.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.0"
+  },
+  "type": "module"
+}
+>>>>>>> 55d54c0 (created react threejs earth model on homepage)
