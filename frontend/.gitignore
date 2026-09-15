@@ -2,4 +2,8 @@
 node_modules/
 .next/
 *.tsbuildinfo
+.open-next/
+.wrangler/
+.dev.vars*
+!.dev.vars.example
 
