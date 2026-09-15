@@ -47,6 +47,7 @@ export default function Home() {
           <span className="planet-edition">PERSONAL WORLD <b>01</b></span>
         </div>
       </header>
+      <a className="push-settings-entry" href="/push" aria-label="打开通知设置">通知设置</a>
 
       <section className="planet-stage" aria-label="个人世界地图">
         <aside className="world-menu" aria-label="世界区域导航">

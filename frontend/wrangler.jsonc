@@ -8,6 +8,34 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "env": {
+    "production": {
+      "name": "weave-personal-planet",
+      "vars": {
+        "VAPID_PUBLIC_KEY": "BIB5tr4Hqj6zyXNcmG556J888tX_dvJnte5QvGK2YvWLESgfVdWz_IUDYw2OkumwhOO6GfusxGGpF1cYubSNLww",
+        "VAPID_SUBJECT": "https://github.com/viewNan/Weave"
+      },
+      "d1_databases": [{
+        "binding": "PUSH_SUBSCRIPTIONS_DB",
+        "database_name": "weave-push-production",
+        "database_id": "8717b5f4-e04d-4b6d-acde-16212767ebcf",
+        "migrations_dir": "migrations"
+      }]
+    },
+    "preview": {
+      "name": "weave-personal-planet-preview",
+      "vars": {
+        "VAPID_PUBLIC_KEY": "BIB5tr4Hqj6zyXNcmG556J888tX_dvJnte5QvGK2YvWLESgfVdWz_IUDYw2OkumwhOO6GfusxGGpF1cYubSNLww",
+        "VAPID_SUBJECT": "https://github.com/viewNan/Weave"
+      },
+      "d1_databases": [{
+        "binding": "PUSH_SUBSCRIPTIONS_DB",
+        "database_name": "weave-push-preview",
+        "database_id": "a576845a-695a-484e-93f2-431716d50ff8",
+        "migrations_dir": "migrations"
+      }]
+    }
+  },
   "observability": {
     "enabled": true
   }

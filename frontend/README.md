@@ -31,8 +31,7 @@ npm run cf:preview
 ```
 
 `cf:deploy` is intentionally available but must only be run after a Worker and
-Git integration are configured in Cloudflare. Do not add database bindings or
-secrets for this static deployment spike. The Worker project name is
+Git integration are configured in Cloudflare. The Worker project name is
 `weave-personal-planet`; update it only if that name is unavailable in the
 target Cloudflare account.
 
@@ -46,3 +45,55 @@ World data and authored coastlines: `lib/world.ts`. Spherical area calibration a
 Area targets are 60% ocean / 32% land / 8% ice. The brief's incomplete land percentages are treated as relative weights and normalized to the 32% land budget. Tests verify calibrated spherical areas, island counts, mesh budget, above-water vertices and non-overlapping distribution using 24,000 sphere samples. Familiarity currently uses authored defaults, not usage history.
 
 Google Fonts is optional; system fonts remain available offline. WebGL is required for the interactive scene; an explanatory fallback is shown if unavailable.
+
+## Web Push preview setup
+
+The `/push` page is a small iPhone PWA notification test surface. It registers
+`/sw.js`, requests notification permission only after **开启通知** is clicked,
+stores the subscription in D1, and sends a test push to that same subscription.
+It does not add scheduling, authentication, or any change to the Python/Postgres
+backend.
+
+1. Create a **preview** D1 database, for example `weave-push-preview`, then
+   replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc`. Do not create or
+   bind a production database in this phase.
+2. Apply the checked-in migration with `npx wrangler d1 migrations apply
+   weave-push-preview --remote`.
+3. Generate a VAPID key pair, for example with `npx web-push generate-vapid-keys`.
+   `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT` are normal Worker variables.
+   `VAPID_PRIVATE_KEY` must be a Cloudflare Secret (`npx wrangler secret put
+   VAPID_PRIVATE_KEY`); never commit it. Add all three to `.dev.vars` for local Worker
+   preview. The public key endpoint makes the public key available to the PWA at
+   runtime, so no `NEXT_PUBLIC_` build variable is needed.
+4. Run `npm run cf:build`, then deploy the branch preview through the configured
+   Git integration, or use `npx wrangler deploy` after the preview binding and
+   secrets exist. Do not run `cf:deploy` until you approve that external change.
+
+On an iPhone running iOS 16.4 or newer, open the HTTPS preview in Safari, use
+Share → Add to Home Screen, then launch Weave from its new icon. Open `/push`,
+tap **开启通知**, allow notifications, and tap **发送测试通知**. Close the web
+app and repeat the test: the system notification should still arrive. The
+remaining platform constraint is Apple’s: iOS Web Push works only for a Home
+Screen web app on iOS 16.4+, over HTTPS; it cannot be validated against
+`localhost` from an iPhone.
+
+## Reusable backend notifications
+
+Server-side code can call `NotificationService.send({ title, body, url?, type?,
+metadata? })`. It fans out to every active D1 subscription and removes endpoints
+when the provider returns 404 or 410. `userId` and `deviceId` are reserved for a
+future directed-delivery schema.
+
+For a trusted PC or automation, set `INTERNAL_API_TOKEN` as a Cloudflare Secret
+on the preview Worker, then call:
+
+```sh
+curl -X POST https://weave-personal-planet-preview.ryujyonan.workers.dev/api/internal/notifications \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{"title":"Weave","body":"PC-triggered test","url":"/push","type":"test"}'
+```
+
+The endpoint is server-to-server only and rejects requests without the token.
+Morning Brief or a future Cron should call `NotificationService` directly from
+its server-side task, not route through the browser or a PushSubscription endpoint.

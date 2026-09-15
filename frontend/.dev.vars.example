@@ -1,0 +1,8 @@
+# Public value; safe to place in a Cloudflare Worker variable.
+VAPID_PUBLIC_KEY=
+# Keep this in .dev.vars locally and Cloudflare Secrets remotely.
+VAPID_PRIVATE_KEY=
+# This is not secret, but keep the complete local configuration together.
+VAPID_SUBJECT=mailto:you@example.com
+# Server-to-server token for /api/internal/notifications. Never expose it to the browser.
+INTERNAL_API_TOKEN=

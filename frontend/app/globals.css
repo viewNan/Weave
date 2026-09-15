@@ -1279,6 +1279,11 @@ tr:last-child td {
 .planet-brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border: 1.5px solid #f4f6fa; border-radius: 50%; font: 700 22px Georgia, serif; transform: rotate(-12deg); }
 .planet-tools { display: flex; align-items: center; gap: 28px; color: #c4cede; font-size: 11px; }
 .planet-tools a { color: #f4c08f; }
+.push-settings-entry { position: fixed; top: 104px; right: 24px; z-index: 9; padding: 9px 13px; border: 1px solid rgba(225, 236, 249, .28); border-radius: 999px; color: #f4c08f; background: rgba(30, 48, 75, .8); box-shadow: 0 8px 24px rgba(0, 0, 0, .2); font-size: 11px; }
+.push-settings-entry:hover { background: rgba(67, 89, 123, .9); color: #fff; }
+.push-action { border: 0; border-radius: 8px; padding: 10px 14px; color: #fff; background: #355b89; cursor: pointer; font-weight: 700; }
+.push-action:hover:not(:disabled) { background: #4673a7; }
+.push-action:disabled { cursor: not-allowed; opacity: .5; }
 .planet-edition { display: flex; align-items: center; gap: 10px; font-size: 9px; letter-spacing: 1.7px; }
 .planet-edition b { border: 1px solid rgba(225, 236, 249, .35); border-radius: 50%; padding: 7px; font-size: 9px; letter-spacing: 0; }
 .planet-stage { min-height: calc(100vh - 139px); position: relative; }
@@ -1316,6 +1321,7 @@ tr:last-child td {
   .planet-home { overflow: visible; padding: 0 18px; }
   .planet-header { height: 72px; }
   .planet-tools { gap: 12px; }
+  .push-settings-entry { top: 84px; right: 18px; }
   .planet-edition { display: none; }
   .planet-stage { min-height: 860px; }
   .world-menu { position: relative; top: auto; width: 100%; margin-top: 18px; }
