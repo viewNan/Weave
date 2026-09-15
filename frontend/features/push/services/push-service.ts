@@ -18,7 +18,27 @@ const concat = (...values: Bytes[]): Bytes => {
   return output;
 };
 const hmac = async (key: Bytes, value: Bytes): Promise<Bytes> => new Uint8Array(await crypto.subtle.sign('HMAC', await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']), value));
-const hkdf = async (key: Bytes, salt: Bytes, info: Bytes, length: number): Promise<Bytes> => new Uint8Array(await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, await crypto.subtle.importKey('raw', key, 'HKDF', false, ['deriveBits']), length * 8));
+const hkdfExpand = async (prk: Bytes, info: Bytes, length: number): Promise<Bytes> => (await hmac(prk, concat(info, new Uint8Array([1])))).slice(0, length);
+const recordSize = 4096;
+
+export async function derivePushKeys(sharedSecret: Bytes, auth: Bytes, receiver: Bytes, sender: Bytes, salt: Bytes) {
+  const keyInfo = concat(encoder.encode('WebPush: info\0'), receiver, sender);
+  const ikm = await hkdfExpand(await hmac(auth, sharedSecret), keyInfo, 32);
+  const contentPrk = await hmac(salt, ikm);
+  return {
+    ikm,
+    cek: await hkdfExpand(contentPrk, encoder.encode('Content-Encoding: aes128gcm\0'), 16),
+    nonce: await hkdfExpand(contentPrk, encoder.encode('Content-Encoding: nonce\0'), 12),
+  };
+}
+
+export async function encryptRecord(cek: Bytes, nonce: Bytes, payload: string) {
+  const plaintext = concat(encoder.encode(payload), new Uint8Array([2]));
+  if (plaintext.length + 16 >= recordSize) throw new Error('Push payload exceeds the RFC 8291 single-record limit.');
+  return new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']), plaintext));
+}
+
+export const buildRecord = (salt: Bytes, senderPublic: Bytes, ciphertext: Bytes) => concat(salt, new Uint8Array([0, 0, 16, 0]), new Uint8Array([senderPublic.length]), senderPublic, ciphertext);
 
 async function encrypt(subscription: PushSubscriptionRecord, payload: string) {
   const receiver = fromBase64Url(subscription.p256dh);
@@ -28,12 +48,8 @@ async function encrypt(subscription: PushSubscriptionRecord, payload: string) {
   const receiverKey = await crypto.subtle.importKey('raw', receiver, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
   const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: receiverKey }, sender.privateKey, 256));
   const senderPublic = new Uint8Array(await crypto.subtle.exportKey('raw', sender.publicKey));
-  const ikm = await hkdf(sharedSecret, await hmac(auth, sharedSecret), concat(encoder.encode('WebPush: info\0'), receiver, senderPublic), 32);
-  const contentKey = await hkdf(ikm, salt, encoder.encode('Content-Encoding: aes128gcm\0'), 16);
-  const nonce = await hkdf(ikm, salt, encoder.encode('Content-Encoding: nonce\0'), 12);
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, await crypto.subtle.importKey('raw', contentKey, 'AES-GCM', false, ['encrypt']), concat(encoder.encode(payload), new Uint8Array([2]))));
-  const recordSize = new Uint8Array([0, 0, 16, 0]);
-  return concat(salt, recordSize, new Uint8Array([senderPublic.length]), senderPublic, ciphertext);
+  const { cek, nonce } = await derivePushKeys(sharedSecret, auth, receiver, senderPublic, salt);
+  return buildRecord(salt, senderPublic, await encryptRecord(cek, nonce, payload));
 }
 
 async function vapidAuthorization(endpoint: string, config: VapidConfig) {
@@ -78,6 +94,7 @@ export class PushService {
       },
       body: await encrypt(subscription, JSON.stringify({ title: 'Weave', body: '测试通知已送达。', url: '/push' })),
     });
-    if (!response.ok) throw new Error(`Push service returned ${response.status}.`);
+    const providerBody = (await response.text()).slice(0, 1_000) || null;
+    return { accepted: response.status >= 200 && response.status < 300, providerStatus: response.status, providerBody };
   }
 }

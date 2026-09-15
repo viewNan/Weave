@@ -9,6 +9,8 @@ export default function PushSettings() {
   const [status, setStatus] = useState<Status>('Unsupported');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [message, setMessage] = useState('');
+  const [providerStatus, setProviderStatus] = useState<number | null>(null);
+  const [providerBody, setProviderBody] = useState<string | null>(null);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
@@ -40,13 +42,17 @@ export default function PushSettings() {
     if (!subscription) return;
     const response = await fetch('/api/push/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
     const result = await response.json();
-    setMessage(response.ok ? '测试通知已发送。' : result.error || '发送失败。');
+    setProviderStatus(result.providerStatus ?? null);
+    setProviderBody(result.providerBody ?? null);
+    setMessage(result.accepted ? 'Push provider 已接受请求；系统通知是否送达仍取决于设备与 provider。' : result.error || result.providerBody || 'Push provider 拒绝了请求。');
   };
 
   return <main style={{ maxWidth: 560, margin: '4rem auto', padding: '0 1.5rem', fontFamily: 'system-ui, sans-serif' }}>
     <a href="/">← 返回 Weave</a><h1>通知设置</h1><p>通知状态：<strong>{status}</strong></p>
     {status === 'Unsupported' && <p>此浏览器不支持 Web Push。iPhone 需要 iOS 16.4+，并从主屏幕打开 Weave。</p>}
-    <p><button onClick={enable} disabled={status === 'Unsupported' || status === 'Enabled'}>开启通知</button>{' '}<button onClick={test} disabled={!subscription}>发送测试通知</button></p>
+    <p><button className="push-action" onClick={enable} disabled={status === 'Unsupported' || status === 'Enabled'}>开启通知</button>{' '}<button className="push-action" onClick={test} disabled={!subscription}>发送测试通知</button></p>
+    {providerStatus !== null && <p>Push provider status: <strong>{providerStatus}</strong></p>}
+    {providerBody && <p>Push provider response: <code>{providerBody}</code></p>}
     {message && <p aria-live="polite">{message}</p>}
   </main>;
 }

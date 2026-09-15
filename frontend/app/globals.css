@@ -1281,6 +1281,9 @@ tr:last-child td {
 .planet-tools a { color: #f4c08f; }
 .push-settings-entry { position: fixed; top: 104px; right: 24px; z-index: 9; padding: 9px 13px; border: 1px solid rgba(225, 236, 249, .28); border-radius: 999px; color: #f4c08f; background: rgba(30, 48, 75, .8); box-shadow: 0 8px 24px rgba(0, 0, 0, .2); font-size: 11px; }
 .push-settings-entry:hover { background: rgba(67, 89, 123, .9); color: #fff; }
+.push-action { border: 0; border-radius: 8px; padding: 10px 14px; color: #fff; background: #355b89; cursor: pointer; font-weight: 700; }
+.push-action:hover:not(:disabled) { background: #4673a7; }
+.push-action:disabled { cursor: not-allowed; opacity: .5; }
 .planet-edition { display: flex; align-items: center; gap: 10px; font-size: 9px; letter-spacing: 1.7px; }
 .planet-edition b { border: 1px solid rgba(225, 236, 249, .35); border-radius: 50%; padding: 7px; font-size: 9px; letter-spacing: 0; }
 .planet-stage { min-height: calc(100vh - 139px); position: relative; }
