@@ -2,6 +2,8 @@ import type { PushSubscriptionRecord, PushSubscriptionRepository } from '../repo
 
 type VapidConfig = { publicKey: string; privateKey: string; subject: string };
 type Bytes = Uint8Array<ArrayBuffer>;
+export type PushMessage = { title: string; body: string; url?: string; type?: string; metadata?: Record<string, unknown> };
+export type PushProviderResult = { accepted: boolean; providerStatus: number; providerBody: string | null };
 
 const encoder = new TextEncoder();
 const base64Url = (value: ArrayBuffer | Uint8Array) => {
@@ -80,9 +82,7 @@ export class PushService {
     await this.subscriptions.upsert(subscription);
   }
 
-  async sendTest(endpoint: string) {
-    const subscription = await this.subscriptions.findByEndpoint(endpoint);
-    if (!subscription) throw new Error('No saved PushSubscription for this device.');
+  async send(subscription: PushSubscriptionRecord, message: PushMessage): Promise<PushProviderResult> {
     const response = await fetch(subscription.endpoint, {
       method: 'POST',
       headers: {
@@ -92,9 +92,17 @@ export class PushService {
         TTL: '60',
         Urgency: 'high',
       },
-      body: await encrypt(subscription, JSON.stringify({ title: 'Weave', body: '测试通知已送达。', url: '/push' })),
+      body: await encrypt(subscription, JSON.stringify(message)),
     });
     const providerBody = (await response.text()).slice(0, 1_000) || null;
     return { accepted: response.status >= 200 && response.status < 300, providerStatus: response.status, providerBody };
+  }
+
+  async sendTest(endpoint: string) {
+    const subscription = await this.subscriptions.findByEndpoint(endpoint);
+    if (!subscription) throw new Error('No saved PushSubscription for this device.');
+    const result = await this.send(subscription, { title: 'Weave', body: '测试通知已送达。', url: '/push', type: 'test' });
+    if (result.providerStatus === 404 || result.providerStatus === 410) await this.subscriptions.deleteByEndpoint(endpoint);
+    return result;
   }
 }

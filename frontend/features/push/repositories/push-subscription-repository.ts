@@ -7,4 +7,6 @@ export type PushSubscriptionRecord = {
 export interface PushSubscriptionRepository {
   upsert(subscription: PushSubscriptionRecord): Promise<void>;
   findByEndpoint(endpoint: string): Promise<PushSubscriptionRecord | null>;
+  listActive(): Promise<PushSubscriptionRecord[]>;
+  deleteByEndpoint(endpoint: string): Promise<void>;
 }

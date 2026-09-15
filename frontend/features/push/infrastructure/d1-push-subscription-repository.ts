@@ -1,7 +1,7 @@
 import type { PushSubscriptionRecord, PushSubscriptionRepository } from '../repositories/push-subscription-repository';
 
 type D1 = {
-  prepare(query: string): { bind(...values: string[]): { run(): Promise<unknown>; first<T>(): Promise<T | null> } };
+  prepare(query: string): { bind(...values: string[]): { run(): Promise<unknown>; first<T>(): Promise<T | null>; all<T>(): Promise<{ results: T[] }> } };
 };
 
 export class D1PushSubscriptionRepository implements PushSubscriptionRepository {
@@ -22,5 +22,15 @@ export class D1PushSubscriptionRepository implements PushSubscriptionRepository 
     return this.db.prepare(
       'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE endpoint = ?',
     ).bind(endpoint).first<PushSubscriptionRecord>();
+  }
+
+  async listActive() {
+    return (await this.db.prepare(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions ORDER BY updated_at DESC',
+    ).bind().all<PushSubscriptionRecord>()).results;
+  }
+
+  async deleteByEndpoint(endpoint: string) {
+    await this.db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(endpoint).run();
   }
 }

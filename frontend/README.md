@@ -76,3 +76,24 @@ app and repeat the test: the system notification should still arrive. The
 remaining platform constraint is Apple’s: iOS Web Push works only for a Home
 Screen web app on iOS 16.4+, over HTTPS; it cannot be validated against
 `localhost` from an iPhone.
+
+## Reusable backend notifications
+
+Server-side code can call `NotificationService.send({ title, body, url?, type?,
+metadata? })`. It fans out to every active D1 subscription and removes endpoints
+when the provider returns 404 or 410. `userId` and `deviceId` are reserved for a
+future directed-delivery schema.
+
+For a trusted PC or automation, set `INTERNAL_API_TOKEN` as a Cloudflare Secret
+on the preview Worker, then call:
+
+```sh
+curl -X POST https://weave-personal-planet-preview.ryujyonan.workers.dev/api/internal/notifications \
+  -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{"title":"Weave","body":"PC-triggered test","url":"/push","type":"test"}'
+```
+
+The endpoint is server-to-server only and rejects requests without the token.
+Morning Brief or a future Cron should call `NotificationService` directly from
+its server-side task, not route through the browser or a PushSubscription endpoint.
