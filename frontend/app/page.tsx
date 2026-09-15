@@ -44,6 +44,7 @@ export default function Home() {
         </a>
         <div className="planet-tools">
           <a href="/files">文件库</a>
+          <a href="/push">通知</a>
           <span className="planet-edition">PERSONAL WORLD <b>01</b></span>
         </div>
       </header>

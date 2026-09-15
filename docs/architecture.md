@@ -50,3 +50,17 @@ separate local Python/PostgreSQL application and is not part of this Worker.
 
 No Cloudflare binding, D1 adapter, API client, or credential is present in this
 deployment spike. The Files feature continues to compose its mock repository.
+
+## Push notification boundary
+
+The Web Push feature uses Cloudflare D1 only for `push_subscriptions`; it does
+not touch the existing Python/PostgreSQL backend. Its request direction is:
+
+```text
+Route Handler -> PushService -> PushSubscriptionRepository -> D1PushSubscriptionRepository
+```
+
+The route handlers compose the service from the Worker binding. Only the D1
+repository calls `prepare`; React components use the HTTP API and browser Push
+APIs only. `VAPID_PRIVATE_KEY` stays in a Cloudflare Secret and never crosses
+into client code.

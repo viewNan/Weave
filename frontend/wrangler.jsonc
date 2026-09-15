@@ -8,6 +8,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Replace only after creating a preview D1 database; do not commit a real database_id.
+  "d1_databases": [{
+    "binding": "PUSH_SUBSCRIPTIONS_DB",
+    "database_name": "weave-push-preview",
+    "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+    "migrations_dir": "migrations"
+  }],
   "observability": {
     "enabled": true
   }
