@@ -8,12 +8,17 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  "d1_databases": [{
-    "binding": "PUSH_SUBSCRIPTIONS_DB",
-    "database_name": "weave-push-preview",
-    "database_id": "a576845a-695a-484e-93f2-431716d50ff8",
-    "migrations_dir": "migrations"
-  }],
+  "env": {
+    "preview": {
+      "name": "weave-personal-planet-preview",
+      "d1_databases": [{
+        "binding": "PUSH_SUBSCRIPTIONS_DB",
+        "database_name": "weave-push-preview",
+        "database_id": "a576845a-695a-484e-93f2-431716d50ff8",
+        "migrations_dir": "migrations"
+      }]
+    }
+  },
   "observability": {
     "enabled": true
   }
