@@ -7,6 +7,7 @@ declare global {
     VAPID_PRIVATE_KEY?: string;
     VAPID_SUBJECT?: string;
     INTERNAL_API_TOKEN?: string;
+    OPENAI_API_KEY?: string;
   }
 }
 
