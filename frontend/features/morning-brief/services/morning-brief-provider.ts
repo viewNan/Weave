@@ -1,3 +1,4 @@
-import type { CategoryId } from '../config/content-policy';
-export type GeneratedBrief={title:string;speechText:string;categories:CategoryId[];sources:string[]};
-export interface MorningBriefProvider { generate(date:string,categories:CategoryId[]):Promise<GeneratedBrief>; }
+import type { CategoryId } from '../config/content-policy.ts';
+import type { EditorialItem } from '../config/editorial-policy.ts';
+export type GeneratedBrief={title:string;speechText:string;categories:CategoryId[];sources:string[];items:EditorialItem[]};
+export interface MorningBriefProvider { generate(input:{date:string;categories:CategoryId[];recentItems:EditorialItem[]}):Promise<GeneratedBrief>; }

@@ -1,4 +1,4 @@
 import { CATEGORIES,type CategoryId } from '../../../../../features/morning-brief/config/content-policy'; import { createMorningBriefService } from '../../../../../features/morning-brief/services/create-morning-brief-service';
-export const dynamic='force-dynamic'; const valid=(w:any)=>w&&typeof w==='object'&&Object.entries(w).every(([d,cs])=>/^[0-6]$/.test(d)&&Array.isArray(cs)&&cs.every((c:any)=>c in CATEGORIES));
+export const dynamic='force-dynamic'; const valid=(w:any)=>w&&typeof w==='object'&&[0,1,2,3,4,5,6].every(d=>Array.isArray(w[String(d)])&&w[String(d)].every((c:any)=>c in CATEGORIES));
 export async function GET(){const s=await (await createMorningBriefService()).getSettings();return Response.json({...s,availableCategories:CATEGORIES});}
 export async function PUT(request:Request){try{const {weekdays}=await request.json();if(!valid(weekdays))throw new Error('Invalid weekday categories.');await (await createMorningBriefService()).updateSettings(weekdays as Record<string,CategoryId[]>);return Response.json({ok:true});}catch(e){return Response.json({error:e instanceof Error?e.message:'Invalid request.'},{status:400});}}
