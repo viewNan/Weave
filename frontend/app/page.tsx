@@ -43,12 +43,12 @@ export default function Home() {
           <span>weave</span><b>.</b>
         </a>
         <div className="planet-tools">
-          <a href="/files">文件库</a>
-          <a href="/morning-brief">晨报</a>
+          <a href="/console/files">文件库</a>
+          <a href="/console/morning-brief">晨报</a>
           <span className="planet-edition">PERSONAL WORLD <b>01</b></span>
         </div>
       </header>
-      <a className="push-settings-entry" href="/settings?tab=push" aria-label="打开通知设置">通知设置</a>
+      <a className="push-settings-entry" href="/console/notifications" aria-label="打开通知设置">通知设置</a>
 
       <section className="planet-stage" aria-label="个人世界地图">
         <aside className="world-menu" aria-label="世界区域导航">
@@ -75,7 +75,7 @@ export default function Home() {
                       {section.items.map((item) => (
                         <a
                           className="world-subitem"
-                          href={item === 'Papers' ? '/files' : '#planet'}
+                          href={item === 'Papers' ? '/console/files' : '#planet'}
                           onClick={() => setActive(section.id)}
                           key={item}
                         >

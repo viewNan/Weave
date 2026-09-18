@@ -1,3 +1,3 @@
-import SettingsWorkspace from './SettingsWorkspace';
+import { redirect } from 'next/navigation';
 
-export default function SettingsPage() { return <SettingsWorkspace />; }
+export default function SettingsPage() { redirect('/console'); }

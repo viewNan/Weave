@@ -1,2 +1,2 @@
-import MorningBriefManager from '../../features/morning-brief/ui/MorningBriefManager';
-export default function Page(){return <MorningBriefManager/>}
+import { redirect } from 'next/navigation';
+export default function Page(){ redirect('/console/morning-brief'); }

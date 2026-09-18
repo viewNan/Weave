@@ -1,11 +1,2 @@
 import type { ButtonHTMLAttributes } from 'react';
-
-export function Button({ className = '', variant = 'default', size = 'default', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'outline' | 'ghost'; size?: 'default' | 'sm' }) {
-  const styles = {
-    default: 'bg-[#7667F5] text-white hover:bg-[#6557e6] shadow-sm',
-    outline: 'border border-[#7667F5]/20 bg-white text-[#5144bf] hover:bg-[#7667F5]/[0.06]',
-    ghost: 'text-slate-600 hover:bg-white/80 hover:text-slate-900',
-  }[variant];
-  const sizes = size === 'sm' ? 'h-9 px-3 text-sm' : 'h-10 px-4';
-  return <button className={`inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${sizes} ${styles} ${className}`} {...props} />;
-}
+export function Button({ className = '', variant = 'default', size = 'default', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'outline' | 'ghost' | 'secondary'; size?: 'default' | 'sm' | 'icon' }) { const styles = { default: 'bg-primary text-primary-foreground hover:bg-primary/90', outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground', ghost: 'hover:bg-accent hover:text-accent-foreground', secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80' }[variant]; const sizes = { default: 'h-10 px-4 py-2', sm: 'h-9 rounded-md px-3', icon: 'h-10 w-10' }[size]; return <button className={`inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${sizes} ${styles} ${className}`} {...props} />; }
