@@ -1,3 +1,3 @@
-import PushSettings from './PushSettings';
+import { redirect } from 'next/navigation';
 
-export default function PushPage() { return <PushSettings />; }
+export default function PushPage() { redirect('/settings?tab=push'); }

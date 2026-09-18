@@ -75,6 +75,10 @@ The layout should breathe. Do not try to fill every available area with metrics.
 
 ## Technical implementation
 
+### Morning Brief Settings workspace
+
+设置页统一使用 shadcn 风格的可复用组件：圆角卡片、标签页、按钮、复选框和开关。页面背景使用 `#F7F5FF`，主色使用 `#7667F5`，通知区使用薄荷绿 `#A8E6CF`，账号区使用杏色 `#FFD6A5`。晨报、通知、账号与安全都从 `/settings` 管理；旧的 `/push` 地址保留为兼容入口并跳转到通知设置。
+
 Keep visual patterns reusable through shared CSS variables and components. The
 frontend should remain independent from the backend data model. Current first
 version scope:
