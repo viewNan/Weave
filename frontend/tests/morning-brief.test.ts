@@ -27,6 +27,13 @@ test('morning brief generates once, preserves manual text, and distinguishes adm
   assert.equal(cached.created, false); assert.equal(cached.speechText, '这是我手动写好的晨报。'); assert.equal(repo.calls.provider, 1); assert.equal(repo.calls.push, 1); assert.equal(repo.calls.shortcut, 1);
 });
 
+test('shortcut only reads a prepared brief and never starts generation', async () => {
+  const repo = new MemoryRepository();
+  const service = new MorningBriefService(repo, { generate: async () => { repo.calls.provider++; throw new Error('must not generate'); } }, { send: async () => ({ accepted:0,rejected:0,invalidated:0 }) });
+  assert.equal(await service.getTodayForShortcut(), null);
+  assert.equal(repo.calls.provider, 0);
+});
+
 test('editorial validation rejects duplicate events and accepts a material update', () => {
   const valid = validateGeneratedBrief({ title:'晨报', speechText:'这是符合要求的中文晨报内容。'.repeat(8), items:[{ ...item, updateType:'material_update', materialUpdateReason:'官方公布了日期。' }] });
   assert.equal(valid.items[0].updateType, 'material_update');

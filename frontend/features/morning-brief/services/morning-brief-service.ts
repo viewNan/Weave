@@ -11,6 +11,12 @@ export class MorningBriefService {
   private provider: MorningBriefProvider;
   private notifier: Notifier;
   constructor(repo: MorningBriefRepository, provider: MorningBriefProvider, notifier: Notifier) { this.repo = repo; this.provider = provider; this.notifier = notifier; }
+  async getTodayForShortcut() {
+    const date = todayJst(); const brief = await this.repo.find(date);
+    if (!brief) return null;
+    await this.repo.markShortcutAccessed(date, new Date().toISOString());
+    return { ...brief, created: false };
+  }
   async getOrCreateToday(client:'shortcut'|'admin'='shortcut') {
     const date=todayJst();const accessedAt=new Date().toISOString();const existing=await this.repo.find(date);
     if(existing){if(client==='shortcut')await this.repo.markShortcutAccessed(date,accessedAt);return {...existing,created:false};}

@@ -3,8 +3,7 @@ import { D1PushSubscriptionRepository } from '../infrastructure/d1-push-subscrip
 import { NotificationService } from './notification-service';
 import { PushService } from './push-service';
 
-export async function createNotificationService() {
-  const { env } = await getCloudflareContext({ async: true });
+export function createNotificationServiceFromEnv(env: CloudflareEnv) {
   if (!env.PUSH_SUBSCRIPTIONS_DB || !env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY || !env.VAPID_SUBJECT) {
     throw new Error('Push bindings are not configured.');
   }
@@ -15,4 +14,9 @@ export async function createNotificationService() {
     subject: env.VAPID_SUBJECT,
   });
   return new NotificationService(subscriptions, push);
+}
+
+export async function createNotificationService() {
+  const { env } = await getCloudflareContext({ async: true });
+  return createNotificationServiceFromEnv(env);
 }

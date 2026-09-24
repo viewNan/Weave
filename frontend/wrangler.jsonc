@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "weave-personal-planet",
-  "main": ".open-next/worker.js",
+  "main": "worker.mjs",
   "compatibility_date": "2026-09-15",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -35,5 +35,8 @@
   },
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": ["30 21 * * *"]
   }
 }
