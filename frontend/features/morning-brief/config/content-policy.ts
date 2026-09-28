@@ -3,5 +3,5 @@ export const CATEGORIES = {
   developer: '开发者', science_space: '科学 / 太空', games_culture: '游戏 / 文化', weekly_review: '本周回顾', next_week_watch: '下周关注',
 } as const;
 export type CategoryId = keyof typeof CATEGORIES;
-export const DEFAULT_WEEKDAYS: Record<string, CategoryId[]> = { 1:['ai_tech','japan_life','international','developer'],2:['ai_tech','japan_life','international','developer'],3:['ai_tech','japan_life','international','developer'],4:['ai_tech','japan_life','international','developer'],5:['ai_tech','japan_life','international','developer'],6:['ai_tech','science_space','games_culture'],0:['weekly_review','next_week_watch','science_space','games_culture'] };
+export const DAILY_CATEGORIES: CategoryId[] = ['ai_tech','japan_life','international','developer'];
 export const LIMITS: Record<CategoryId, number> = { ai_tech:2,japan_life:2,international:2,business_market:1,developer:1,science_space:1,games_culture:1,weekly_review:1,next_week_watch:1 };

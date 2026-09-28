@@ -1,0 +1,3 @@
+import { createRecipeService } from '../../../../../../features/recipes/services/create-recipe-service';
+export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){try{const {name}=await request.json();if(typeof name!=='string')throw new Error('name 必填。');const {id}=await params;return Response.json(await (await createRecipeService()).renameCategory(id,name));}catch(error){return Response.json({error:error instanceof Error?error.message:'更新失败。'},{status:400});}}
+export async function DELETE(_request:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;await (await createRecipeService()).deleteCategory(id);return new Response(null,{status:204});}

@@ -1,6 +1,6 @@
 import type { EditorialItem } from '../config/editorial-policy';
-import { DEFAULT_WEEKDAYS, type CategoryId } from '../config/content-policy';
-import type { Brief, MorningBriefRepository, Settings } from '../repositories/morning-brief-repository';
+import type { CategoryId } from '../config/content-policy';
+import type { Brief, MorningBriefRepository } from '../repositories/morning-brief-repository';
 
 type D1Result<T = unknown> = { results: T[]; meta?: { changes?: number } };
 type BoundStatement = { first<T>(): Promise<T | null>; all<T>(): Promise<D1Result<T>>; run(): Promise<unknown> };
@@ -12,8 +12,6 @@ const row = (value:BriefRow):Brief => ({ date:value.brief_date,title:value.title
 
 export class D1MorningBriefRepository implements MorningBriefRepository {
   constructor(private db:D1) {}
-  async getSettings(){const value=await this.db.prepare('SELECT * FROM morning_brief_settings WHERE id=1').bind().first<{timezone:string;weekday_categories_json:string}>();return {timezone:value?.timezone||'Asia/Tokyo',weekdays:parse(value?.weekday_categories_json??null,DEFAULT_WEEKDAYS)} as Settings;}
-  async updateSettings(weekdays:Record<string,CategoryId[]>) {await this.db.prepare('UPDATE morning_brief_settings SET weekday_categories_json=?,updated_at=? WHERE id=1').bind(JSON.stringify(weekdays),new Date().toISOString()).run();}
   async find(date:string){const value=await this.db.prepare('SELECT * FROM morning_briefs WHERE brief_date=?').bind(date).first<BriefRow>();return value?row(value):null;}
   async insert(brief:Brief){await this.db.prepare('INSERT INTO morning_briefs (brief_date,title,speech_text,categories_json,sources_json,items_json,generated_at,updated_at,manually_edited_at,shortcut_last_accessed_at,push_status,push_accepted,push_rejected,push_invalidated,push_sent_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(brief.date,brief.title,brief.speechText,JSON.stringify(brief.categories),JSON.stringify(brief.sources),JSON.stringify(brief.items),brief.generatedAt,brief.updatedAt,brief.manuallyEditedAt,brief.shortcutLastAccessedAt,brief.pushStatus,brief.pushAccepted,brief.pushRejected,brief.pushInvalidated,brief.pushSentAt).run();}
   async updateSpeechText(date:string,text:string,at:string){await this.db.prepare('UPDATE morning_briefs SET speech_text=?,updated_at=?,manually_edited_at=? WHERE brief_date=?').bind(text,at,at,date).run();return this.find(date);}

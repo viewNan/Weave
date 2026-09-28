@@ -1,4 +1,5 @@
 import { createMorningBriefServiceFromEnv } from './features/morning-brief/services/create-morning-brief-service.ts';
+import { createRecipeServiceFromEnv } from './features/recipes/services/create-recipe-service.ts';
 import { handleCdnCgiImageRequest, handleImageRequest } from './.open-next/cloudflare/images.js';
 import { runWithCloudflareRequestContext } from './.open-next/cloudflare/init.js';
 import { maybeGetSkewProtectionResponse } from './.open-next/cloudflare/skew-protection.js';
@@ -26,7 +27,11 @@ export default {
       return handler(reqOrResp, env, ctx, request.signal);
     });
   },
-  scheduled(_controller, env, ctx) {
+  scheduled(controller, env, ctx) {
+    if (controller.cron === '0 9 * * *') {
+      ctx.waitUntil(createRecipeServiceFromEnv(env).getOrCreateDaily().then(() => createRecipeServiceFromEnv(env).pushToday()).catch((error) => console.error('Scheduled daily recipe failed.', error)));
+      return;
+    }
     ctx.waitUntil(
       createMorningBriefServiceFromEnv(env).getOrCreateToday('admin').catch((error) => {
         console.error('Scheduled morning brief failed.', error);

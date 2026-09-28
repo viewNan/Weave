@@ -1,0 +1,3 @@
+import { createRecipeService } from '../../../../../features/recipes/services/create-recipe-service';
+export async function GET(){try{return Response.json({categories:await (await createRecipeService()).categories()});}catch(error){return Response.json({error:error instanceof Error?error.message:'加载失败。'},{status:502});}}
+export async function POST(request:Request){try{const {name}=await request.json();if(typeof name!=='string')throw new Error('name 必填。');return Response.json(await (await createRecipeService()).createCategory(name));}catch(error){return Response.json({error:error instanceof Error?error.message:'创建失败。'},{status:400});}}

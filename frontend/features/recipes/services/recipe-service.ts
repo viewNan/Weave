@@ -1,0 +1,57 @@
+import seasonalFoods from '../config/seasonal-foods.json';
+import { RECIPE_PREFERENCES } from '../config/recipe-preferences';
+import { todayJst } from '../../morning-brief/server/jst-date';
+
+type D1Result<T> = { results: T[]; meta?: { changes?: number } };
+type ResultStatement = { first<T>(): Promise<T | null>; all<T>(): Promise<D1Result<T>>; run(): Promise<unknown> };
+type Statement = { bind(...values: unknown[]): ResultStatement };
+type D1 = { prepare(query: string): Statement };
+export type Recipe = { id:string; title:string; categoryId:string|null; category:string|null; tags:string[]; minutes:number|null; difficulty:string|null; servings:string|null; markdown:string; createdAt:string; updatedAt:string };
+export type Candidate = { title:string; cuisine:string; minutes:number; difficulty:string; reason:string; recipeId?:string; markdown?:string };
+export type DailyRecommendation = { date:string; candidates:Candidate[]; selectedIndex:number; generatedAt:string; pushStatus:string; meal:MealLog|null };
+export type MealLog = { id:string; date:string; recipeId:string|null; name:string; source:'recommended'|'library'|'freeform'; feedback:'liked'|'neutral'|'disliked'|null; rating:number|null };
+const parse = <T>(value:string, fallback:T) => { try { return JSON.parse(value) as T; } catch { return fallback; } };
+const recipe = (row:any):Recipe => ({ id:row.id,title:row.title,categoryId:row.category_id,category:row.category_name??null,tags:parse(row.tags_json,[]),minutes:row.minutes,difficulty:row.difficulty,servings:row.servings,markdown:row.markdown,createdAt:row.created_at,updatedAt:row.updated_at });
+const meal = (row:any):MealLog => ({ id:row.id,date:row.meal_date,recipeId:row.recipe_id,name:row.meal_name,source:row.source,feedback:row.feedback,rating:row.rating??null });
+
+export class RecipeService {
+  constructor(private db:D1, private openaiKey?:string, private notifier?:{send(input:{title:string;body:string;url:string;type:string}):Promise<{rejected:number}>}) {}
+  async listRecipes(search='') { const result=await this.db.prepare(`SELECT r.*, c.name category_name FROM recipes r LEFT JOIN recipe_categories c ON c.id=r.category_id WHERE r.title LIKE ? OR r.tags_json LIKE ? ORDER BY r.updated_at DESC`).bind(`%${search}%`,`%${search}%`).all<any>(); return result.results.map(recipe); }
+  async categories() { const result=await this.db.prepare('SELECT id,name FROM recipe_categories ORDER BY name').bind().all<{id:string;name:string}>(); return result.results; }
+  async createCategory(name:string) { const trimmed=name.trim(); if(!trimmed||trimmed.length>50) throw new Error('分类名称需为 1–50 个字符。'); const id=crypto.randomUUID(); await this.db.prepare('INSERT OR IGNORE INTO recipe_categories (id,name) VALUES (?,?)').bind(id,trimmed).run(); return (await this.db.prepare('SELECT id,name FROM recipe_categories WHERE name=?').bind(trimmed).first<{id:string;name:string}>())!; }
+  async renameCategory(id:string,name:string) { const trimmed=name.trim(); if(!trimmed||trimmed.length>50) throw new Error('分类名称需为 1–50 个字符。'); await this.db.prepare('UPDATE recipe_categories SET name=? WHERE id=?').bind(trimmed,id).run(); return (await this.db.prepare('SELECT id,name FROM recipe_categories WHERE id=?').bind(id).first<{id:string;name:string}>())!; }
+  async deleteCategory(id:string) { await this.db.prepare('DELETE FROM recipe_categories WHERE id=?').bind(id).run(); }
+  async saveRecipe(input:Partial<Recipe> & { title:string }) { const title=input.title.trim(); if(!title||title.length>120) throw new Error('食谱标题需为 1–120 个字符。'); const now=new Date().toISOString(); const data=[title,input.categoryId||null,JSON.stringify((input.tags||[]).map(tag=>tag.trim()).filter(Boolean).slice(0,20)),input.minutes||null,input.difficulty||null,input.servings||null,input.markdown||'',now]; if(input.id){await this.db.prepare('UPDATE recipes SET title=?,category_id=?,tags_json=?,minutes=?,difficulty=?,servings=?,markdown=?,updated_at=? WHERE id=?').bind(...data,input.id).run(); return this.getRecipe(input.id);} const id=crypto.randomUUID(); await this.db.prepare('INSERT INTO recipes (id,title,category_id,tags_json,minutes,difficulty,servings,markdown,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)').bind(id,...data,now).run(); return this.getRecipe(id); }
+  async getRecipe(id:string) { const found=await this.db.prepare('SELECT r.*,c.name category_name FROM recipes r LEFT JOIN recipe_categories c ON c.id=r.category_id WHERE r.id=?').bind(id).first<any>(); return found?recipe(found):null; }
+  async deleteRecipe(id:string) { await this.db.prepare('DELETE FROM recipes WHERE id=?').bind(id).run(); }
+  async daily(date=todayJst()):Promise<DailyRecommendation|null> { const found=await this.db.prepare('SELECT * FROM daily_recipe_recommendations WHERE recommendation_date=?').bind(date).first<any>(); if(!found)return null; const logged=await this.db.prepare('SELECT * FROM meal_logs WHERE meal_date=? ORDER BY created_at DESC LIMIT 1').bind(date).first<any>(); return {date,candidates:parse<Candidate[]>(found.candidates_json,[]),selectedIndex:found.selected_index,generatedAt:found.generated_at,pushStatus:found.push_status,meal:logged?meal(logged):null}; }
+  async recentMeals(limit=4) { const result=await this.db.prepare('SELECT * FROM meal_logs ORDER BY meal_date DESC,created_at DESC LIMIT ?').bind(limit).all<any>(); return result.results.map(meal); }
+  async getOrCreateDaily() { const existing=await this.daily(); if(existing)return existing; const date=todayJst(); const recipes=await this.listRecipes(); const recent=await this.recentMeals(10); const candidates=await this.generateCandidates(date,recipes,recent); const now=new Date().toISOString(); await this.db.prepare('INSERT INTO daily_recipe_recommendations (recommendation_date,candidates_json,generated_at) VALUES (?,?,?)').bind(date,JSON.stringify(candidates),now).run(); return (await this.daily(date))!; }
+  async select(index:number) { const daily=await this.getOrCreateDaily(); const selected=((index%daily.candidates.length)+daily.candidates.length)%daily.candidates.length; await this.db.prepare('UPDATE daily_recipe_recommendations SET selected_index=? WHERE recommendation_date=?').bind(selected,daily.date).run(); return {...daily,selectedIndex:selected}; }
+  async logMeal(input:{name:string;recipeId?:string|null;source:MealLog['source']}) { const name=input.name.trim(); if(!name||name.length>120) throw new Error('请填写实际吃的内容。'); const id=crypto.randomUUID(); const date=todayJst(); const now=new Date().toISOString(); await this.db.prepare('INSERT INTO meal_logs (id,meal_date,recipe_id,meal_name,source,created_at,updated_at) VALUES (?,?,?,?,?,?,?)').bind(id,date,input.recipeId||null,name,input.source,now,now).run(); return meal((await this.db.prepare('SELECT * FROM meal_logs WHERE id=?').bind(id).first<any>())!); }
+  async updateTodayMeal(name:string) { const value=name.trim(); if(!value||value.length>120) throw new Error('请填写实际吃的内容。'); const latest=await this.db.prepare('SELECT * FROM meal_logs WHERE meal_date=? ORDER BY created_at DESC LIMIT 1').bind(todayJst()).first<any>(); if(!latest) throw new Error('今天还没有饮食记录。'); await this.db.prepare('UPDATE meal_logs SET meal_name=?,updated_at=? WHERE id=?').bind(value,new Date().toISOString(),latest.id).run(); return {...meal(latest),name:value}; }
+  async clearTodayMeal() { const latest=await this.db.prepare('SELECT id FROM meal_logs WHERE meal_date=? ORDER BY created_at DESC LIMIT 1').bind(todayJst()).first<{id:string}>(); if(!latest) return; await this.db.prepare('DELETE FROM meal_logs WHERE id=?').bind(latest.id).run(); }
+  async rateTodayMeal(rating:number) { if(!Number.isInteger(rating)||rating<1||rating>5) throw new Error('评分需为 1–5。'); const latest=await this.db.prepare('SELECT * FROM meal_logs WHERE meal_date=? ORDER BY created_at DESC LIMIT 1').bind(todayJst()).first<any>(); if(!latest) throw new Error('请先记录今天实际吃了什么。'); await this.db.prepare('UPDATE meal_logs SET rating=?,updated_at=? WHERE id=?').bind(rating,new Date().toISOString(),latest.id).run(); return {...meal(latest),rating}; }
+  async feedback(value:MealLog['feedback']) { if(!['liked','neutral','disliked'].includes(value||'')) throw new Error('反馈无效。'); const latest=await this.db.prepare('SELECT * FROM meal_logs WHERE meal_date=? ORDER BY created_at DESC LIMIT 1').bind(todayJst()).first<any>(); if(!latest) throw new Error('请先记录今天实际吃了什么。'); await this.db.prepare('UPDATE meal_logs SET feedback=?,updated_at=? WHERE id=?').bind(value,new Date().toISOString(),latest.id).run(); return {...meal(latest),feedback:value}; }
+  async pushToday() { const daily=await this.getOrCreateDaily(); const primary=daily.candidates[0]; if(!this.notifier) throw new Error('通知服务未配置。'); const p=await this.notifier.send({title:'🍳 Weave · 今天吃什么',body:`${primary.title} · ${primary.reason} · 约 ${primary.minutes} 分钟。`,url:'/console/recipes/daily',type:'daily_recipe'}); const status=p.rejected?'partial':'sent'; await this.db.prepare('UPDATE daily_recipe_recommendations SET push_status=?,push_sent_at=? WHERE recommendation_date=?').bind(status,new Date().toISOString(),daily.date).run(); return {...daily,pushStatus:status}; }
+  private async generateCandidates(date:string, recipes:Recipe[], recent:MealLog[]):Promise<Candidate[]> { const month=String(Number(date.slice(5,7))); const season=(seasonalFoods as Record<string,string[]>)[month]||[]; const fallback:Candidate[]=(recipes.slice(0,3).map(item=>({title:item.title,cuisine:item.category||'家常',minutes:item.minutes||30,difficulty:item.difficulty||'简单',reason:`来自你的食谱库；${season[0]||'当季食材'}正当季`,recipeId:item.id,markdown:item.markdown}))); while(fallback.length<3) fallback.push(...[{title:'味噌茄子烧鸡',cuisine:'日式',minutes:30,difficulty:'简单',reason:`${season[0]||'茄子'}正当季，而且最近没有吃过类似料理`},{title:'番茄牛肉炖菜',cuisine:'西式',minutes:45,difficulty:'简单',reason:'与最近饮食错开，适合一锅完成'},{title:'青椒回锅肉',cuisine:'川菜',minutes:25,difficulty:'简单',reason:'下饭、快捷，并使用当季蔬菜'}].slice(fallback.length));
+    if(!this.openaiKey) return fallback.slice(0,3);
+    const prompt=`日期：${date}（日本）。显式偏好：${RECIPE_PREFERENCES}。当季食材：${season.join('、')}。最近实际吃过：${recent.map(x=>x.name).join('、')||'无'}。个人食谱库：${recipes.map(x=>x.title).join('、')||'无'}。请生成三道差异明显、适合一人/两人日常做的菜。避开最近相似菜；优先当季食材。返回 JSON：{"candidates":[{"title":"","cuisine":"","minutes":30,"difficulty":"简单","reason":"不超过35字"}]}。`;
+    const schema = {
+      type: 'object', additionalProperties: false, required: ['candidates'],
+      properties: { candidates: {
+        type: 'array', minItems: 3, maxItems: 3,
+        items: {
+          type: 'object', additionalProperties: false,
+          required: ['title', 'cuisine', 'minutes', 'difficulty', 'reason'],
+          properties: { title: { type: 'string' }, cuisine: { type: 'string' }, minutes: { type: 'integer' }, difficulty: { type: 'string' }, reason: { type: 'string' } },
+        },
+      } },
+    };
+    const res = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${this.openaiKey}` },
+      body: JSON.stringify({ model: 'gpt-5', reasoning: { effort: 'low' }, input: prompt, text: { format: { type: 'json_schema', name: 'daily_recipes', strict: true, schema } } }),
+    });
+    if(!res.ok) return fallback.slice(0,3); const body=await res.json() as {output_text?:string}; const value=parse<{candidates:Candidate[]}>(body.output_text||'',{candidates:fallback}); return value.candidates.length===3?value.candidates:fallback.slice(0,3);
+  }
+}

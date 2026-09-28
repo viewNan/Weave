@@ -1,0 +1,5 @@
+import { createRecipeService } from '../../../../../features/recipes/services/create-recipe-service';
+export const dynamic='force-dynamic';
+export async function GET(){try{const service=await createRecipeService();return Response.json({daily:await service.daily(),recentMeals:await service.recentMeals(),recipes:await service.listRecipes()});}catch(error){return Response.json({error:error instanceof Error?error.message:'加载失败。'},{status:502});}}
+export async function POST(){try{return Response.json(await (await createRecipeService()).getOrCreateDaily());}catch(error){return Response.json({error:error instanceof Error?error.message:'生成失败。'},{status:400});}}
+export async function PATCH(request:Request){try{const {selectedIndex}=await request.json();if(!Number.isInteger(selectedIndex))throw new Error('selectedIndex 必须为整数。');return Response.json(await (await createRecipeService()).select(selectedIndex));}catch(error){return Response.json({error:error instanceof Error?error.message:'更新失败。'},{status:400});}}

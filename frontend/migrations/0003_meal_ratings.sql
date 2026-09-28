@@ -1,0 +1,1 @@
+ALTER TABLE meal_logs ADD COLUMN rating INTEGER CHECK (rating BETWEEN 1 AND 5);
