@@ -1,0 +1,4 @@
+.study-wheel { transition: transform .25s ease; }
+.study-wheel-spinning { animation: study-spin 1.45s cubic-bezier(.16,.78,.18,1) forwards; }
+@keyframes study-spin { to { transform: rotate(1440deg); } }
+@media (prefers-reduced-motion: reduce) { .study-wheel-spinning { animation: none; transform: scale(1.04); } }

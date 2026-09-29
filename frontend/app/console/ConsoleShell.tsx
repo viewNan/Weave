@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bell, ChevronDown, FileText, LayoutDashboard, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Bell, ChevronDown, Dices, FileText, LayoutDashboard, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
@@ -10,6 +10,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel
 const nav = [
   { href: '/console', label: 'Overview', icon: LayoutDashboard },
   { href: '/console/morning-brief', label: 'Morning Brief', icon: Sun },
+  { href: '/console/study', label: '学习转盘', icon: Dices },
   { href: '/console/notifications', label: 'Notifications', icon: Bell },
   { href: '/console/files', label: 'Files', icon: FileText },
 ];

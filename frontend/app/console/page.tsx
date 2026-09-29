@@ -1,10 +1,11 @@
-import { ArrowRight, Bell, FileText, Sun, UtensilsCrossed } from 'lucide-react';
+import { ArrowRight, Bell, Dices, FileText, Sun, UtensilsCrossed } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 
 const items = [
   { href: '/console/morning-brief', title: 'Morning Brief', description: '生成今天的晨报并编辑播报稿。', icon: Sun },
   { href: '/console/eat', title: 'Eat', description: '生成每日推荐、记录实际饮食并管理个人食谱。', icon: UtensilsCrossed },
+  { href: '/console/study', title: '学习转盘', description: '把学习内容交给转盘，直接开始这一轮。', icon: Dices },
   { href: '/console/notifications', title: 'Notifications', description: '管理 Web Push 订阅并发送测试通知。', icon: Bell },
   { href: '/console/files', title: 'Files', description: '浏览、搜索和查看个人文件。', icon: FileText },
 ];
