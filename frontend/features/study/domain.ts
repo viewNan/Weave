@@ -1,14 +1,22 @@
-export type StudyItem = { id:string; title:string; enabled:boolean; sortOrder:number; createdAt:string; updatedAt:string };
-export type StudySuggestion = { id:string; title:string; sortOrder:number };
-export type StudySettings = { focusMinMinutes:number; focusMaxMinutes:number; breakMinMinutes:number; breakMaxMinutes:number };
-export type RoundStatus = 'drawn'|'rerolled'|'focusing'|'paused'|'focus_elapsed'|'break_ready'|'resting'|'completed'|'abandoned';
-export type StudyRound = { id:string; studyItemId:string|null; studyTitle:string; plannedFocusMinutes:number; plannedBreakMinutes:number; actualFocusSeconds:number; status:RoundStatus; drawnAt:string; focusStartedAt:string|null; focusEndsAt:string|null; pausedAt:string|null; pausedRemainingSeconds:number|null; focusFinishedAt:string|null; breakStartedAt:string|null; breakEndsAt:string|null; completedAt:string|null; abandonedAt:string|null; createdAt:string; updatedAt:string };
-
+export type ActivityType='work'|'study'|'relax';
+export type StudyItem={id:string;title:string;type:ActivityType;plannedDurationMinutes:number;completedSeconds:number;remainingSeconds:number;enabled:boolean;sortOrder:number;createdAt:string;updatedAt:string};
+export type StudySuggestion={id:string;title:string;type:ActivityType;plannedDurationMinutes:number;sortOrder:number};
+export type StudySettings={focusMinMinutes:number;focusMaxMinutes:number;breakMinMinutes:number;breakMaxMinutes:number};
+export type FatigueLevel=0|1|2;
+export type ActivitySessionState={fatigueLevel:FatigueLevel;consecutiveLoadCount:number;recentCompletedActivityId:string|null;recentCompletedActivityType:ActivityType|null;updatedAt:string};
+export type RoundStatus='drawn'|'rerolled'|'focusing'|'paused'|'focus_elapsed'|'break_ready'|'resting'|'completed'|'abandoned';
+export type StudyRound={id:string;studyItemId:string|null;studyTitle:string;activityType:ActivityType;plannedFocusMinutes:number;plannedBreakMinutes:number;actualFocusSeconds:number;status:RoundStatus;drawnAt:string;focusStartedAt:string|null;focusEndsAt:string|null;pausedAt:string|null;pausedRemainingSeconds:number|null;focusFinishedAt:string|null;breakStartedAt:string|null;breakEndsAt:string|null;completedAt:string|null;abandonedAt:string|null;createdAt:string;updatedAt:string};
 export const defaultStudySettings:StudySettings={focusMinMinutes:25,focusMaxMinutes:50,breakMinMinutes:5,breakMaxMinutes:12};
+export const defaultSessionState:ActivitySessionState={fatigueLevel:0,consecutiveLoadCount:0,recentCompletedActivityId:null,recentCompletedActivityType:null,updatedAt:''};
 export const activeRoundStatuses:RoundStatus[]=['drawn','focusing','paused','focus_elapsed','break_ready','resting'];
 export const randomInt=(min:number,max:number,rng=Math.random)=>min+Math.floor(rng()*(max-min+1));
-export function pickStudyItem(items:StudyItem[],previousId?:string|null,rng=Math.random){const enabled=items.filter(item=>item.enabled);const candidates=enabled.length>1?enabled.filter(item=>item.id!==previousId):enabled;if(!candidates.length) throw new Error('先添加一个启用的学习内容。');return candidates[Math.floor(rng()*candidates.length)];}
-export function randomRound(items:StudyItem[],settings:StudySettings,previousId?:string|null,rng=Math.random){return {item:pickStudyItem(items,previousId,rng),focusMinutes:randomInt(settings.focusMinMinutes,settings.focusMaxMinutes,rng),breakMinutes:randomInt(settings.breakMinMinutes,settings.breakMaxMinutes,rng)};}
+export const typeLabel:Record<ActivityType,string>={work:'工作',study:'学习',relax:'放松'};
+export const typeTheme:Record<ActivityType,string>={work:'border-orange-200 bg-orange-50 text-orange-800',study:'border-violet-200 bg-violet-50 text-violet-800',relax:'border-emerald-200 bg-emerald-50 text-emerald-800'};
+const baseWeights:Record<FatigueLevel,Record<ActivityType,number>>={0:{work:40,study:40,relax:20},1:{work:32,study:32,relax:36},2:{work:22,study:22,relax:56}};
+export function categoryWeights(items:StudyItem[],state:ActivitySessionState){const available=new Set(items.filter(item=>item.enabled&&item.remainingSeconds>0).map(item=>item.type));const weights={...baseWeights[state.fatigueLevel]};if(state.consecutiveLoadCount>=3&&available.has('relax'))weights.relax=Math.min(60,weights.relax+12);for(const type of Object.keys(weights) as ActivityType[])if(!available.has(type))weights[type]=0;if(!Object.values(weights).some(Boolean))throw new Error('今天的活动时间已用完。');return weights;}
+export function pickActivityType(items:StudyItem[],state:ActivitySessionState,rng=Math.random){const weights=categoryWeights(items,state),target=rng()*Object.values(weights).reduce((sum,value)=>sum+value,0);let cursor=0;for(const type of ['work','study','relax'] as ActivityType[]){cursor+=weights[type];if(target<cursor)return type;}return 'relax';}
+export function pickStudyItem(items:StudyItem[],previousId?:string|null,rng=Math.random,type?:ActivityType){const enabled=items.filter(item=>item.enabled&&item.remainingSeconds>0&&(!type||item.type===type));const candidates=enabled.length>1?enabled.filter(item=>item.id!==previousId):enabled;if(!candidates.length)throw new Error('今天的活动时间已用完。');return candidates[Math.floor(rng()*candidates.length)];}
+export function randomRound(items:StudyItem[],settings:StudySettings,previousId?:string|null,rng=Math.random,state:ActivitySessionState=defaultSessionState){const type=pickActivityType(items,state,rng),item=pickStudyItem(items,previousId,rng,type),remainingMinutes=Math.ceil(item.remainingSeconds/60);return {item,focusMinutes:Math.min(randomInt(settings.focusMinMinutes,settings.focusMaxMinutes,rng),remainingMinutes),breakMinutes:item.type==='relax'?0:randomInt(settings.breakMinMinutes,settings.breakMaxMinutes,rng)};}
 export const remainingSeconds=(endsAt:string|null,now=Date.now())=>endsAt?Math.max(0,Math.ceil((new Date(endsAt).getTime()-now)/1000)):0;
 export const elapsedSeconds=(startedAt:string|null,now=Date.now())=>startedAt?Math.max(0,Math.floor((now-new Date(startedAt).getTime())/1000)):0;
 export const formatDuration=(seconds:number)=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;

@@ -10,7 +10,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel
 const nav = [
   { href: '/console', label: 'Overview', icon: LayoutDashboard },
   { href: '/console/morning-brief', label: 'Morning Brief', icon: Sun },
-  { href: '/console/study', label: '学习转盘', icon: Dices },
+  { href: '/console/study', label: '活动转盘', icon: Dices },
   { href: '/console/notifications', label: 'Notifications', icon: Bell },
   { href: '/console/files', label: 'Files', icon: FileText },
 ];
