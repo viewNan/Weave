@@ -4,6 +4,8 @@
   "main": "worker.mjs",
   "compatibility_date": "2026-09-15",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [{ "pattern": "weave.bynan.fyi", "custom_domain": true }],
+  "workers_dev": true,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

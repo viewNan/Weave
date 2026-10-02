@@ -1,8 +1,20 @@
 'use client';
-import { ArrowRight, BookOpen, ChefHat } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
-
-type Daily={candidates:{title:string;minutes:number}[];selectedIndex:number;meal:{name:string}|null}; type Recipe={title:string;updatedAt:string};
-export default function EatOverview(){const [daily,setDaily]=useState<Daily|null>(null),[recipes,setRecipes]=useState<Recipe[]>([]);const local=process.env.NODE_ENV==='development';useEffect(()=>{if(local){setDaily({candidates:[{title:'味噌茄子烧鸡',minutes:30}],selectedIndex:0,meal:null});setRecipes([{title:'麻婆豆腐',updatedAt:''},{title:'照烧鸡腿',updatedAt:''}]);return;}Promise.all([fetch('/api/internal/recipes/daily',{headers:{'x-weave-client':'admin'}}),fetch('/api/internal/recipes',{headers:{'x-weave-client':'admin'}})]).then(async([d,r])=>{setDaily((await d.json()).daily);setRecipes((await r.json()).recipes||[]);}).catch(()=>{});},[]);const today=daily?.candidates[daily.selectedIndex];return <div className="mx-auto w-full max-w-5xl space-y-8 p-6 md:p-10"><header><h1 className="text-3xl font-semibold tracking-tight">Eat</h1><p className="mt-2 text-muted-foreground">把今天的选择和你的厨房笔记放在一起。</p></header><div className="grid gap-5 md:grid-cols-2"><Card><CardHeader><ChefHat className="mb-2" size={20}/><CardDescription>每日食谱</CardDescription><CardTitle className="text-xl">{today?.title||'今天还没有推荐'}</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">{today?`约 ${today.minutes} 分钟${daily?.meal?` · 已记录：${daily.meal.name}`:' · 三道候选等你选择'}`:'生成三道候选，再决定今天吃什么。'}</p><a href="/console/eat/daily"><Button variant="outline">打开每日食谱 <ArrowRight size={15}/></Button></a></CardContent></Card><Card><CardHeader><BookOpen className="mb-2" size={20}/><CardDescription>我的食谱</CardDescription><CardTitle className="text-xl">{recipes.length} 道食谱</CardTitle></CardHeader><CardContent><p className="mb-4 text-sm text-muted-foreground">{recipes[0]?`最近更新：${recipes[0].title}`:'把常做、改良过的菜记成自己的 Markdown 食谱。'}</p><a href="/console/eat/my-recipes"><Button variant="outline">打开我的食谱 <ArrowRight size={15}/></Button></a></CardContent></Card></div></div>}
+import type { DailyRecommendation, MealLog, Recipe } from '../domain';
+import { recipeRequest } from './client';
+type Overview = { daily: DailyRecommendation|null; meal: MealLog|null; recipes:Recipe[] };
+export default function EatOverview() {
+  const [data,setData]=useState<Overview|null>(null),[error,setError]=useState('');
+  async function load(){setError('');try{setData(await recipeRequest<Overview>('/daily'));}catch(e){setError((e as Error).message);}}
+  useEffect(()=>{void load();},[]);
+  const today=data?.daily?.candidates[data.daily.selectedIndex];
+  return <div className="mx-auto max-w-5xl space-y-6 p-6 md:p-10"><header><h1 className="text-3xl font-semibold">Eat</h1><p className="mt-2 text-muted-foreground">今天的选择与你的厨房笔记。</p></header>
+    {error&&<div role="alert"><p className="text-destructive">{error}</p><Button variant="outline" onClick={()=>void load()}>重新加载</Button></div>}
+    {!data&&!error&&<p>正在读取…</p>}
+    {data&&<div className="grid gap-5 md:grid-cols-2"><Card><CardHeader><CardTitle>{today?.title||'今天还没有推荐'}</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">{data.meal ? `实际吃了：${data.meal.name}` : '今天还没有用餐记录。'}</p><Link className="inline-flex h-10 items-center rounded-md border px-4 text-sm" href="/console/eat/daily">每日菜单推荐</Link></CardContent></Card>
+    <Card><CardHeader><CardTitle>{data.recipes.length} 道个人食谱</CardTitle></CardHeader><CardContent><Link className="inline-flex h-10 items-center rounded-md border px-4 text-sm" href="/console/eat/my-recipes">我的食谱</Link></CardContent></Card></div>}
+  </div>;
+}

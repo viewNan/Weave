@@ -77,7 +77,58 @@ remaining platform constraint is Apple’s: iOS Web Push works only for a Home
 Screen web app on iOS 16.4+, over HTTPS; it cannot be validated against
 `localhost` from an iPhone.
 
-## Reusable backend notifications
+## Eat storage and reliability
+
+Eat uses the existing `PUSH_SUBSCRIPTIONS_DB` D1 binding, not the separate
+Python/PostgreSQL knowledge backend. Local development uses persistent local D1
+under `.wrangler/state/v3`; an empty local database is not production data.
+Before `npm run dev`, apply local migrations from `frontend`:
+
+```sh
+npx wrangler d1 migrations apply weave-push-production --local
+```
+
+Use `.dev.vars.example` as the configuration reference. `OPENAI_API_KEY` enables
+generation; missing configuration or provider failures never produce mock menus.
+Production also requires an unpredictable `EAT_ADMIN_TOKEN` of at least 32
+characters, supplied as a Worker Secret, never committed. The unlock form creates
+an eight-hour signed HttpOnly session; mutating requests require the same Origin.
+Only loopback `next dev` bypasses login. Production fails closed if the secret is
+missing. This protects Eat routes, not the entire Console or other existing APIs.
+
+Before publishing this version, back up the target database, configure the secret,
+apply `0006_recipe_reliability.sql` to the intended remote database, build, and
+verify unauthorized requests are denied. Local migration does not migrate remote
+D1. No deployment is implied by these instructions.
+
+- Recommendations and actual meals are independent. One active main meal per
+  date is enforced in SQL. Clearing archives it; duplicate legacy rows are also
+  archived, not deleted. Edits use record ID and revision to reject stale writes.
+  Replacing a meal clears its old score and source references; typo correction
+  preserves them. Ratings are nullable integers from 1 to 5.
+- Memory is rebuilt from active meals in the last 90 calendar days: the latest
+  14 records plus exact-dish counts, rating counts/averages and last-eaten dates.
+  Explicit preferences (`features/recipes/config/recipe-preferences.ts`), monthly
+  seasonal data and up to 50 library entries are separate inputs. Preferences
+  currently remain unset; the private Markdown file is not read automatically.
+  Ratings never automatically overwrite preferences. No vector store is needed.
+- Each successful recommendation saves its versioned input snapshot and model
+  response ID alongside three validated candidates. Later meal corrections affect
+  the next generation, not an already-saved menu or its audit snapshot. Editing
+  does not currently retain every prior revision as an event history.
+- Generation claims are persisted by date and fenced by owner. Failures require
+  manual retry after 60 seconds; stalled claims after five minutes; at most three
+  attempts per day. An uncertain remote request may still have incurred cost.
+  Switching candidates only saves the index. Push is claimed once; unknown
+  delivery results are not automatically replayed.
+- `npm test` includes real SQLite migration/storage checks and a simulated model
+  provider for concurrency, failure, parsing and session checks. These do not
+  prove live API availability or device push delivery.
+
+Responses parsing follows the official [text output structure](https://developers.openai.com/api/docs/guides/text)
+and [structured outputs guidance](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+## Reusable backend notifications (service usage)
 
 Server-side code can call `NotificationService.send({ title, body, url?, type?,
 metadata? })`. It fans out to every active D1 subscription and removes endpoints

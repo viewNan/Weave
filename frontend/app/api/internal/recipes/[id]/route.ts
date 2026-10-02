@@ -1,3 +1,4 @@
-import { createRecipeService } from '../../../../../features/recipes/services/create-recipe-service';
-export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){try{const input=await request.json();const {id}=await params;if(typeof input.title!=='string')throw new Error('title 必填。');return Response.json(await (await createRecipeService()).saveRecipe({...input,id}));}catch(error){return Response.json({error:error instanceof Error?error.message:'保存失败。'},{status:400});}}
-export async function DELETE(_request:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;await (await createRecipeService()).deleteRecipe(id);return new Response(null,{status:204});}
+import { recipeRoute, jsonBody } from '../../../../../features/recipes/server/http';
+type Context = { params: Promise<{ id: string }> };
+export async function PATCH(request: Request, context: Context) { return recipeRoute(request, async service => service.saveRecipe({ ...await jsonBody(request), id: (await context.params).id })); }
+export async function DELETE(request: Request, context: Context) { return recipeRoute(request, async service => service.deleteRecipe((await context.params).id)); }

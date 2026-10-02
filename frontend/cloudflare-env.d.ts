@@ -8,6 +8,7 @@ declare global {
     VAPID_SUBJECT?: string;
     INTERNAL_API_TOKEN?: string;
     OPENAI_API_KEY?: string;
+    EAT_ADMIN_TOKEN?: string;
   }
 }
 

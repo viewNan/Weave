@@ -1,10 +1,115 @@
 'use client';
-import { Clock3, Pencil, RefreshCw, Star, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { Star } from 'lucide-react';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
-type Candidate={title:string;cuisine:string;minutes:number;difficulty:string;reason:string;recipeId?:string}; type Meal={id:string;name:string;rating:number|null}; type Daily={date:string;candidates:Candidate[];selectedIndex:number;meal:Meal|null}; const headers={'content-type':'application/json','x-weave-client':'admin'};
-const demo:Daily={date:'2026-09-28',selectedIndex:0,meal:null,candidates:[{title:'味噌茄子烧鸡',cuisine:'日式',minutes:30,difficulty:'简单',reason:'茄子正当季，而且最近没有吃过类似料理'},{title:'番茄牛肉炖菜',cuisine:'西式',minutes:45,difficulty:'简单',reason:'与最近饮食错开'},{title:'青椒回锅肉',cuisine:'川菜',minutes:25,difficulty:'简单',reason:'下饭、快捷'}]};
-export default function DailyMenu(){const [daily,setDaily]=useState<Daily|null>(null),[text,setText]=useState(''),[editing,setEditing]=useState(false),[status,setStatus]=useState('');const local=process.env.NODE_ENV==='development';const load=async()=>{if(local){setDaily(demo);return;}const res=await fetch('/api/internal/recipes/daily',{headers});const data=await res.json();if(!res.ok)throw new Error(data.error);setDaily(data.daily);};useEffect(()=>{load().catch(e=>setStatus(e.message));},[]);const selected=daily?.candidates[daily.selectedIndex];async function request(url:string,method='POST',body?:unknown){const res=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined});const data=await res.json().catch(()=>null);if(!res.ok)throw new Error(data?.error||'操作失败。');return data;}async function record(name=selected?.title||''){if(!name.trim())return;try{if(daily?.meal){const item=local?{...daily.meal,name}:await request('/api/internal/recipes/daily/meal','PATCH',{name});setDaily(d=>d?{...d,meal:item}:d);}else{const item=local?{id:'local',name,rating:null}:await request('/api/internal/recipes/daily/meal','POST',{name,recipeId:selected?.recipeId||null,source:selected?'recommended':'freeform'});setDaily(d=>d?{...d,meal:item}:d);}setEditing(false);setText('');}catch(e){setStatus(e instanceof Error?e.message:'保存失败。');}}async function clear(){if(!daily?.meal||!window.confirm(`清除今天的「${daily.meal.name}」记录吗？`))return;try{if(!local)await request('/api/internal/recipes/daily/meal','DELETE');setDaily(d=>d?{...d,meal:null}:d);}catch(e){setStatus(e instanceof Error?e.message:'清除失败。');}}async function rate(rating:number){try{const meal=local?{...daily!.meal!,rating}:await request('/api/internal/recipes/daily/feedback','POST',{rating});setDaily(d=>d?{...d,meal}:d);}catch(e){setStatus(e instanceof Error?e.message:'评分失败。');}}return <div className="mx-auto w-full max-w-5xl space-y-6 p-6 md:p-10"><header className="flex items-start justify-between gap-4"><div><h1 className="text-3xl font-semibold tracking-tight">每日菜单推荐</h1><p className="mt-2 text-sm text-muted-foreground">今天推荐什么，最后实际吃了什么。</p>{status&&<p className="mt-2 text-sm text-destructive">{status}</p>}</div><a href="/console/eat/my-recipes"><Button variant="outline">我的食谱</Button></a></header>{!daily?<Card><CardContent className="p-8 text-center"><Button onClick={load}><RefreshCw size={16}/>加载今日菜单</Button></CardContent></Card>:<><Card><CardHeader><CardDescription>今日推荐 · {daily.date}</CardDescription><CardTitle className="text-2xl">{selected?.title}</CardTitle><div className="flex gap-2 pt-2"><Badge variant="outline">{selected?.cuisine}</Badge><Badge variant="outline"><Clock3 size={13}/>{selected?.minutes} min</Badge><Badge variant="outline">{selected?.difficulty}</Badge></div></CardHeader><CardContent><p className="mb-5 text-sm text-muted-foreground">{selected?.reason}</p><div className="flex flex-wrap gap-2"><Button onClick={()=>record()}>记录为今天吃了</Button><Button variant="outline" onClick={()=>setDaily(d=>d?{...d,selectedIndex:(d.selectedIndex+1)%d.candidates.length}:d)}>换一个</Button></div></CardContent></Card><section><h2 className="mb-3 text-sm font-medium">备选推荐</h2><div className="grid gap-3 md:grid-cols-2">{daily.candidates.filter((_,i)=>i!==daily.selectedIndex).map(item=><Card key={item.title}><CardContent className="p-4"><p className="font-medium">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.cuisine} · {item.minutes} min</p><Button className="mt-3" size="sm" variant="outline" onClick={()=>setDaily(d=>d?{...d,selectedIndex:d.candidates.indexOf(item)}:d)}>选这个</Button></CardContent></Card>)}</div></section><Card><CardHeader><CardDescription>今天实际吃了</CardDescription><CardTitle className="text-lg">{daily.meal?.name||'还没有记录'}</CardTitle></CardHeader><CardContent>{editing?<div className="flex flex-wrap gap-2"><Input className="min-w-52 flex-1" autoFocus value={text} onChange={e=>setText(e.target.value)} placeholder="今天实际吃了什么？"/><Button onClick={()=>record(text)}>保存</Button><Button variant="outline" onClick={()=>setEditing(false)}>取消</Button></div>:daily.meal?<div className="space-y-4"><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={()=>{setText(daily.meal!.name);setEditing(true);}}><Pencil size={14}/>编辑</Button><Button size="sm" variant="outline" onClick={()=>{setText('');setEditing(true);}}>替换</Button><Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={clear}><Trash2 size={14}/>清除</Button></div><div className="border-t pt-4"><p className="mb-2 text-sm font-medium">这顿吃得怎么样？</p><div className="flex items-center gap-1" role="radiogroup" aria-label="用餐评分">{[1,2,3,4,5].map(value=><button key={value} type="button" aria-label={`${value} 分`} aria-checked={daily.meal!.rating===value} className={`rounded-md p-1 transition-colors hover:bg-muted ${value<=(daily.meal!.rating||0)?'text-amber-500':'text-muted-foreground'}`} onClick={()=>rate(value)}><Star size={22} fill={value<=(daily.meal!.rating||0)?'currentColor':'none'}/></button>)}<span className="ml-2 text-sm text-muted-foreground">{daily.meal.rating?`${daily.meal.rating} / 5`:'还未评分'}</span></div></div></div>:<Button variant="outline" onClick={()=>setEditing(true)}>记录实际用餐</Button>}</CardContent></Card><details className="text-sm text-muted-foreground"><summary className="cursor-pointer font-medium">最近吃过</summary><p className="mt-3">这部分放在首屏之后，用来帮助下一次推荐避开重复。</p></details></>}</div>}
+import type { DailyRecommendation, MealLog, MealInput, Recipe } from '../domain';
+import { recipeRequest } from './client';
+
+type Snapshot = { date: string; daily: DailyRecommendation | null; meal: MealLog | null; recentMeals: MealLog[]; recipes: Recipe[]; generation: { status: string; attempts: number } | null };
+type Editor = { mode: 'edit' | 'replace' | 'create'; target: MealLog | null; name: string; recipeId: string };
+const sources = { recommended: '来自推荐', library: '来自食谱库', freeform: '自由记录' };
+
+export default function DailyMenu() {
+  const [data, setData] = useState<Snapshot | null>(null), [busy, setBusy] = useState(false);
+  const [error, setError] = useState(''), [editor, setEditor] = useState<Editor | null>(null);
+  const inFlight = useRef(false);
+  const load = async () => setData(await recipeRequest<Snapshot>('/daily'));
+  useEffect(() => { load().catch(e => setError(e.message)); }, []);
+  async function run(action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true; setBusy(true); setError('');
+    try { await action(); await load(); }
+    catch (e) { setError((e as Error).message); await load().catch(() => {}); }
+    finally { inFlight.current = false; setBusy(false); }
+  }
+  const daily = data?.daily, selected = daily?.candidates[daily.selectedIndex], meal = data?.meal;
+  const identity = (item: MealLog) => ({ date: item.date, id: item.id, revision: item.revision });
+  async function recordRecommended() {
+    if (!data || !daily) return;
+    if (meal && !window.confirm(`将「${meal.name}」替换为「${selected?.title}」？原评分会清除。`)) return;
+    await run(async () => {
+      const input: MealInput = { source: 'recommended', candidateIndex: daily.selectedIndex };
+      await recipeRequest('/daily/meal', meal ? 'PATCH' : 'POST', meal ? { ...identity(meal), ...input, mode: 'replace' } : { date: data.date, ...input });
+      setEditor(null);
+    });
+  }
+  async function saveEditor() {
+    if (!data || !editor) return;
+    if (editor.mode === 'replace' && !window.confirm('确认替换这条饮食记录并清除原评分？')) return;
+    await run(async () => {
+      const input: MealInput = editor.mode !== 'edit' && editor.recipeId ? { source: 'library', recipeId: editor.recipeId } : { source: 'freeform', name: editor.name };
+      await recipeRequest('/daily/meal', editor.target ? 'PATCH' : 'POST', editor.target ? { ...identity(editor.target), ...input, mode: editor.mode } : { date: data.date, ...input });
+      setEditor(null);
+    });
+  }
+  function clear(item: MealLog) {
+    if (window.confirm(`清除 ${item.date} 的「${item.name}」？它将不再参与以后推荐。`)) void run(async () => {
+      await recipeRequest('/daily/meal', 'DELETE', identity(item)); setEditor(null);
+    });
+  }
+  function rating(item: MealLog) {
+    return <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`${item.name}的用餐评分`}>
+      {[1, 2, 3, 4, 5].map(value => <Button key={value} type="button" size="sm" variant="ghost" disabled={busy}
+        aria-label={`${value} 分`} aria-pressed={item.rating === value}
+        onClick={() => void run(async () => { await recipeRequest('/daily/feedback', 'POST', { ...identity(item), rating: value }); })}>
+        <Star size={20} className={value <= (item.rating || 0) ? 'text-amber-500' : 'text-muted-foreground'} fill={value <= (item.rating || 0) ? 'currentColor' : 'none'} />
+      </Button>)}
+      <span className="ml-2 text-sm text-muted-foreground">{item.rating ? `${item.rating} / 5` : '未评分'}</span>
+      {item.rating !== null && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await recipeRequest('/daily/feedback', 'POST', { ...identity(item), rating: null }); })}>清除评分</Button>}
+    </div>;
+  }
+  function actions(item: MealLog) {
+    return <div className="flex flex-wrap gap-2">
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditor({ mode: 'edit', target: item, name: item.name, recipeId: '' })}>修正文字</Button>
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditor({ mode: 'replace', target: item, name: '', recipeId: '' })}>换成另一顿</Button>
+      <Button size="sm" variant="outline" className="text-destructive" disabled={busy} onClick={() => clear(item)}>清除记录</Button>
+    </div>;
+  }
+  return <div className="mx-auto w-full max-w-5xl space-y-6 p-6 md:p-10" aria-busy={busy}>
+    <header className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-3xl font-semibold tracking-tight">每日菜单推荐</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{data?.date} · 推荐和实际吃过的内容分别保存。</p></div>
+      <div className="flex gap-2"><Link href="/console/eat/my-recipes" className="inline-flex h-10 items-center rounded-md border px-4 text-sm font-medium">我的食谱</Link>
+        <Button variant="outline" disabled={busy} onClick={() => void run(async () => { setEditor(null); })}>刷新</Button></div>
+    </header>
+    {error && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{error}</p>}
+    {!data ? <p className="text-sm text-muted-foreground">{error ? '加载失败，请点击刷新重试。' : '正在读取菜单和饮食记录…'}</p> : <>
+      {!daily ? <Card><CardContent className="space-y-4 p-6"><h2 className="font-semibold">今天还没有推荐</h2>
+        <p className="text-sm text-muted-foreground">{data.generation ? '上次生成尚未完成或未成功。可以先记录用餐；稍后刷新或手动重试。' : '生成三道候选，再决定今天吃什么。也可以直接记录实际用餐。'}</p>
+        <Button disabled={busy || (data.generation?.attempts ?? 0) >= 3} onClick={() => void run(async () => { await recipeRequest('/daily', 'POST', { retry: Boolean(data.generation) }); })}>
+          {busy ? '正在处理…' : data.generation ? '重试生成推荐' : '生成今日推荐'}</Button>
+        {(data.generation?.attempts ?? 0) >= 3 && <p className="text-sm text-muted-foreground">今天已尝试3次，请明天再试。</p>}
+      </CardContent></Card> : <>
+        <Card><CardHeader><CardDescription>今日推荐 · {daily.date}</CardDescription><CardTitle className="text-2xl">{selected?.title}</CardTitle>
+          <div className="flex flex-wrap gap-2 pt-2"><Badge variant="outline">{selected?.cuisine}</Badge><Badge variant="outline">{selected?.minutes} 分钟</Badge><Badge variant="outline">{selected?.difficulty}</Badge></div>
+        </CardHeader><CardContent className="space-y-4">
+          {daily.origin === 'legacy' && <p className="text-sm text-muted-foreground">这是旧版保存的推荐，无法确认其生成来源。</p>}
+          <p className="text-sm text-muted-foreground">{selected?.reason}</p>
+          <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void recordRecommended()}>记录为实际吃了</Button>
+            <Button variant="outline" disabled={busy} onClick={() => void run(async () => { await recipeRequest('/daily', 'PATCH', { date: daily.date, selectedIndex: (daily.selectedIndex + 1) % 3 }); })}>换一个</Button></div>
+          {selected?.markdown ? <details><summary className="cursor-pointer text-sm font-medium">查看材料与做法</summary><pre className="mt-3 whitespace-pre-wrap font-sans text-sm leading-7">{selected.markdown}</pre></details> : <p className="text-sm text-muted-foreground">这条旧推荐没有保存做法。</p>}
+        </CardContent></Card>
+        <section aria-label="备选推荐" className="grid gap-3 sm:grid-cols-2">{daily.candidates.map((item, index) => index === daily.selectedIndex ? null : <Card key={index}><CardContent className="space-y-3 p-4"><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.cuisine} · {item.minutes} 分钟</p>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void run(async () => { await recipeRequest('/daily', 'PATCH', { date: daily.date, selectedIndex: index }); })}>选这个</Button>
+        </CardContent></Card>)}</section>
+      </>}
+      <Card><CardHeader><CardTitle className="text-lg">今天实际吃了什么？</CardTitle><CardDescription>当前每天记录一顿主要用餐；尚无推荐也可以记录。</CardDescription></CardHeader>
+        <CardContent className="space-y-4">{meal ? <><p className="font-medium">{meal.name}</p><p className="text-xs text-muted-foreground">{sources[meal.source]}</p>{actions(meal)}{rating(meal)}</> : <Button variant="outline" disabled={busy} onClick={() => setEditor({ mode: 'create', target: null, name: '', recipeId: '' })}>记录实际用餐</Button>}</CardContent>
+      </Card>
+      {editor && <Card><CardHeader><CardTitle className="text-lg">{editor.target?.date || data.date} · {editor.mode === 'edit' ? '修正文字' : editor.mode === 'replace' ? '换成另一顿' : '记录用餐'}</CardTitle>
+        <CardDescription>{editor.mode === 'edit' ? '用于修正错字，保留原来源和评分。换了一道菜请用“换成另一顿”。' : '保存实际吃过的内容；替换已有记录会清除原评分。'}</CardDescription></CardHeader>
+        <CardContent><form className="space-y-3" onSubmit={event => { event.preventDefault(); void saveEditor(); }}>
+          {editor.mode !== 'edit' && <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" aria-label="从食谱库选择" disabled={busy} value={editor.recipeId} onChange={e => setEditor({ ...editor, recipeId: e.target.value })}><option value="">自己填写</option>{data.recipes.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select>}
+          {!editor.recipeId && <Input aria-label="实际用餐内容" autoFocus maxLength={120} required disabled={busy} value={editor.name} onChange={e => setEditor({ ...editor, name: e.target.value })} placeholder="例如：外食 · 拉面" />}
+          <div className="flex gap-2"><Button disabled={busy || (!editor.recipeId && !editor.name.trim())}>{busy ? '保存中…' : '保存'}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setEditor(null)}>取消</Button></div>
+        </form></CardContent></Card>}
+      <details className="rounded-lg border p-4"><summary className="cursor-pointer text-sm font-medium">最近吃过 · 最近30条记录</summary>
+        <p className="mt-3 text-sm text-muted-foreground">推荐会参考近90天有效记录及评分。修正或清除后，下次生成时会使用更新后的记录。</p>
+        {!data.recentMeals.length ? <p className="mt-4 text-sm text-muted-foreground">还没有饮食记录。</p> : <ul className="divide-y">{data.recentMeals.map(item => <li key={`${item.id}-${item.revision}`} className="space-y-3 py-4"><p className="text-sm">{item.date} · {item.name} <span className="text-muted-foreground">· {sources[item.source]}</span></p>{actions(item)}{rating(item)}</li>)}</ul>}
+      </details>
+    </>}
+  </div>;
+}

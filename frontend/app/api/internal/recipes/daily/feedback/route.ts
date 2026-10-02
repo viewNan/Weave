@@ -1,2 +1,2 @@
-import { createRecipeService } from '../../../../../../features/recipes/services/create-recipe-service';
-export async function POST(request:Request){try{const {rating}=await request.json();return Response.json(await (await createRecipeService()).rateTodayMeal(rating));}catch(error){return Response.json({error:error instanceof Error?error.message:'评分失败。'},{status:400});}}
+import { recipeRoute, jsonBody } from '../../../../../../features/recipes/server/http';
+export async function POST(request: Request) { return recipeRoute(request, async service => { const body = await jsonBody(request); return service.rateMeal(body.date, body.id, body.revision, body.rating); }); }
