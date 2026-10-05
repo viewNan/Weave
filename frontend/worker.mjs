@@ -33,7 +33,7 @@ export default {
       return;
     }
     ctx.waitUntil(
-      createMorningBriefServiceFromEnv(env).getOrCreateToday('admin').catch((error) => {
+      createMorningBriefServiceFromEnv(env).generateAndPushToday().catch((error) => {
         console.error('Scheduled morning brief failed.', error);
       }),
     );

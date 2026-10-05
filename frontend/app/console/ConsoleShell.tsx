@@ -1,6 +1,6 @@
 'use client';
 
-import { Archive, Bell, ChevronDown, Dices, FileText, LayoutDashboard, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Bell, ChevronDown, Dices, FileText, LayoutDashboard, Map, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
@@ -13,6 +13,7 @@ const nav = [
   { href: '/console/study', label: '活动转盘', icon: Dices },
   { href: '/console/notifications', label: 'Notifications', icon: Bell },
   { href: '/console/files', label: 'Files', icon: FileText },
+  { href: '/console/atlas', label: 'Atlas', icon: Map },
 ];
 
 export function ConsoleShell({ children }: { children: React.ReactNode }) {
@@ -21,7 +22,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const eatRoute = pathname.startsWith('/console/eat') || pathname.startsWith('/console/recipes');
   const showEatChildren = eatOpen || (eatRoute && pathname !== '/console/eat');
-  const pageLabel = eatRoute ? 'Eat' : nav.find(item => pathname === item.href || pathname.startsWith(`${item.href}/`))?.label || 'Console';
+  const pageLabel = eatRoute ? 'Eat' : nav.find(item => pathname === item.href || (item.href !== '/console' && pathname.startsWith(`${item.href}/`)))?.label || 'Console';
   return <div className="console-root console-shell flex h-svh min-h-0 overflow-hidden">
     <button className="console-backdrop" aria-label="关闭导航" data-open={open} onClick={() => setOpen(false)} />
     <Sidebar className="console-sidebar" data-open={open}>

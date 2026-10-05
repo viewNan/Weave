@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, Dices, FileText, Sun, UtensilsCrossed } from 'lucide-react';
+import { ArrowRight, Bell, Dices, FileText, Map, Sun, UtensilsCrossed } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 
@@ -8,6 +8,7 @@ const items = [
   { href: '/console/study', title: '学习转盘', description: '把学习内容交给转盘，直接开始这一轮。', icon: Dices },
   { href: '/console/notifications', title: 'Notifications', description: '管理 Web Push 订阅并发送测试通知。', icon: Bell },
   { href: '/console/files', title: 'Files', description: '浏览、搜索和查看个人文件。', icon: FileText },
+  { href: '/console/atlas', title: 'Atlas', description: '整理值得长期记住的设计地图。', icon: Map },
 ];
 
 export default function ConsoleOverview() {

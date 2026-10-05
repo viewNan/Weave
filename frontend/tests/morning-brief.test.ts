@@ -36,6 +36,24 @@ test('shortcut only reads a prepared brief and never starts generation', async (
   assert.equal(repo.calls.provider, 0);
 });
 
+test('scheduled brief pushes once after generation', async () => {
+  const repo = new MemoryRepository();
+  const service = new MorningBriefService(repo, { generate: async () => { repo.calls.provider++; return { title:'今日晨报',speechText:'这是足够长的晨报内容。'.repeat(10),categories:['ai_tech'],sources:item.sourceUrls,items:[item] }; } }, { send: async () => { repo.calls.push++; return { accepted:1,rejected:0,invalidated:0 }; } });
+  const first = await service.generateAndPushToday();
+  assert.equal(first.pushStatus, 'sent');
+  assert.equal(repo.calls.provider, 1);
+  assert.equal(repo.calls.push, 1);
+  await service.generateAndPushToday();
+  assert.equal(repo.calls.provider, 1);
+  assert.equal(repo.calls.push, 1);
+});
+
+test('a push with no subscribers is not marked sent', async () => {
+  const repo = new MemoryRepository();
+  const service = new MorningBriefService(repo, { generate: async () => ({ title:'今日晨报',speechText:'这是足够长的晨报内容。'.repeat(10),categories:['ai_tech'],sources:item.sourceUrls,items:[item] }) }, { send: async () => ({ accepted:0,rejected:0,invalidated:0 }) });
+  assert.equal((await service.generateAndPushToday()).pushStatus, 'failed');
+});
+
 test('OpenAI provider does not replay an indeterminate failed request', async () => {
   const fetch = globalThis.fetch; let calls = 0;
   globalThis.fetch = async () => { calls++; throw new TypeError('offline'); };

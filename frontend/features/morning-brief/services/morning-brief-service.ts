@@ -27,9 +27,13 @@ export class MorningBriefService {
     return { ...brief, created: true };
     } finally {await this.repo.releaseGeneration(date,owner);}
   }
+  async generateAndPushToday() {
+    const brief = await this.getOrCreateToday('admin');
+    return brief.pushStatus === 'pending' ? this.pushToday() : brief;
+  }
   async pushToday() {
     const date = todayJst(); const brief = await this.repo.find(date); if (!brief) throw new Error('今天还没有可推送的晨报。');
-    try { const p = await this.notifier.send({ title: '晨报已准备好', body: '今天的晨报已经生成，点击查看或用快捷指令播报。', url: '/morning-brief', type: 'morning_brief' }); const status = p.rejected ? 'partial' : 'sent'; await this.repo.updatePush(date, { status, accepted:p.accepted, rejected:p.rejected, invalidated:p.invalidated, sentAt:new Date().toISOString() }); return { ...brief, pushStatus:status, pushAccepted:p.accepted, pushRejected:p.rejected, pushInvalidated:p.invalidated, pushSentAt:new Date().toISOString() }; }
+    try { const p = await this.notifier.send({ title: '晨报已准备好', body: '今天的晨报已经生成，点击查看或用快捷指令播报。', url: '/morning-brief', type: 'morning_brief' }); const status = !p.accepted ? 'failed' : p.rejected ? 'partial' : 'sent'; await this.repo.updatePush(date, { status, accepted:p.accepted, rejected:p.rejected, invalidated:p.invalidated, sentAt:new Date().toISOString() }); return { ...brief, pushStatus:status, pushAccepted:p.accepted, pushRejected:p.rejected, pushInvalidated:p.invalidated, pushSentAt:new Date().toISOString() }; }
     catch { await this.repo.updatePush(date, { status:'failed', accepted:0, rejected:0, invalidated:0, sentAt:null }); return { ...brief, pushStatus:'failed' }; }
   }
   updateSpeechText(date: string, text: string) { return this.repo.updateSpeechText(date, text, new Date().toISOString()); }
