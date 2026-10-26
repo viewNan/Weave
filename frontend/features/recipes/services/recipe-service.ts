@@ -3,12 +3,13 @@ import { RECIPE_PREFERENCES } from '../config/recipe-preferences.ts';
 import { todayJst } from '../../morning-brief/server/jst-date.ts';
 import { buildMemory, RecipeError, text, validDate, type Recipe, type MealLog, type MealInput, type DailyRecommendation, type Candidate } from '../domain.ts';
 import { generateCandidates } from './generate-candidates.ts';
+import type { FeaturePreferences } from '../../push/preferences.ts';
 export type { Recipe, MealLog, DailyRecommendation, Candidate } from '../domain.ts';
 
 type Result<T = unknown> = { results: T[]; meta?: { changes?: number } };
 type Bound = { first<T>(): Promise<T | null>; all<T>(): Promise<Result<T>>; run(): Promise<unknown> };
 export type RecipeDatabase = { prepare(query: string): { bind(...values: any[]): Bound } };
-type Notifier = { send(input: { title: string; body: string; url: string; type: string }): Promise<{ accepted: number; rejected: number }> };
+type Notifier = { send(input: { title: string; body: string; url: string; type: string }): Promise<{ accepted: number; rejected: number; skipped?: boolean }> };
 const changed = (result: unknown) => ((result as Result).meta?.changes ?? 0) > 0;
 const recipe = (row: any): Recipe => ({ id: row.id, title: row.title, categoryId: row.category_id, category: row.category_name ?? null,
   tags: JSON.parse(row.tags_json), minutes: row.minutes, difficulty: row.difficulty, servings: row.servings,
@@ -21,7 +22,11 @@ export class RecipeService {
   private db: RecipeDatabase;
   private openaiKey?: string;
   private notifier?: Notifier;
-  constructor(db: RecipeDatabase, openaiKey?: string, notifier?: Notifier) { this.db = db; this.openaiKey = openaiKey; this.notifier = notifier; }
+  private preferences?: FeaturePreferences;
+  constructor(db: RecipeDatabase, openaiKey?: string, notifier?: Notifier, preferences?: FeaturePreferences) { this.db = db; this.openaiKey = openaiKey; this.notifier = notifier; this.preferences = preferences; }
+  private async requireEnabled() {
+    if (this.preferences && !(await this.preferences.read()).daily_recipe) throw new RecipeError('每日食谱功能已停止，AI API 调用已暂停。请在设置中开启功能。', 409);
+  }
   async listRecipes(search = '') {
     const result = await this.db.prepare('SELECT r.*, c.name category_name FROM recipes r LEFT JOIN recipe_categories c ON c.id=r.category_id WHERE r.title LIKE ? OR r.tags_json LIKE ? ORDER BY r.updated_at DESC').bind(`%${search.slice(0, 120)}%`, `%${search.slice(0, 120)}%`).all<any>();
     return result.results.map(recipe);
@@ -93,6 +98,7 @@ export class RecipeService {
     const date = todayJst();
     const existing = await this.daily(date);
     if (existing) return existing;
+    await this.requireEnabled();
     if (!this.openaiKey) throw new RecipeError('尚未配置推荐服务，饮食记录仍可正常使用。', 503);
     const now = new Date().toISOString();
     const owner = crypto.randomUUID();
@@ -107,6 +113,7 @@ export class RecipeService {
       const saved = await this.daily(date);
       if (saved) return saved;
       const context = await this.memory(date);
+      await this.requireEnabled();
       const generated = await generateCandidates(this.openaiKey, context);
       const inserted = await this.db.prepare(`INSERT INTO daily_recipe_recommendations
         (recommendation_date,candidates_json,generated_at,origin,context_json,model_response_id)
@@ -187,6 +194,7 @@ export class RecipeService {
     return this.todayMeal(date);
   }
   async pushToday() {
+    await this.requireEnabled();
     const daily = await this.getOrCreateDaily();
     if (!this.notifier) throw new RecipeError('通知服务未配置。', 503);
     const claim = await this.db.prepare("UPDATE daily_recipe_recommendations SET push_status='sending' WHERE recommendation_date=? AND push_status='pending'").bind(daily.date).run();
@@ -194,6 +202,10 @@ export class RecipeService {
     try {
       const item = daily.candidates[0];
       const result = await this.notifier.send({ title: 'Weave · 今天吃什么', body: `${item.title} · ${item.reason} · 约 ${item.minutes} 分钟。`, url: '/console/eat/daily', type: 'daily_recipe' });
+      if (result.skipped) {
+        await this.db.prepare("UPDATE daily_recipe_recommendations SET push_status='pending' WHERE recommendation_date=?").bind(daily.date).run();
+        return this.daily(daily.date);
+      }
       const status = result.accepted === 0 ? 'failed' : result.rejected ? 'partial' : 'sent';
       await this.db.prepare('UPDATE daily_recipe_recommendations SET push_status=?,push_sent_at=? WHERE recommendation_date=?').bind(status, new Date().toISOString(), daily.date).run();
     } catch {

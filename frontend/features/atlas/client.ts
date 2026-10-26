@@ -5,7 +5,6 @@ export async function atlasRequest<T>(path = '', method = 'GET', body?: unknown)
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await response.json().catch(() => null);
-  if (response.status === 401) window.dispatchEvent(new Event('eat-locked'));
   if (!response.ok) throw new Error(data?.error || 'Atlas 请求未完成。');
   return data as T;
 }

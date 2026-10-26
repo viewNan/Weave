@@ -2,7 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { createRecipeServiceFromEnv } from '../services/create-recipe-service';
 import type { RecipeService } from '../services/recipe-service';
 import { RecipeError } from '../domain';
-import { authenticated, localDevelopment, requireSameOrigin, requireSecret } from './auth';
+import { requireSameOrigin } from './auth';
 
 export const privateHeaders = { 'Cache-Control': 'private, no-store' };
 export function failure(error: unknown) {
@@ -24,9 +24,6 @@ export async function recipeRoute(request: Request, action: (service: RecipeServ
   try {
     if (request.method !== 'GET') requireSameOrigin(request);
     const { env } = await getCloudflareContext({ async: true });
-    if (!localDevelopment(request, process.env.NODE_ENV === 'development')) {
-      if (!await authenticated(request, requireSecret(env.EAT_ADMIN_TOKEN))) throw new RecipeError('请先解锁食谱。', 401);
-    }
     const result = await action(createRecipeServiceFromEnv(env));
     return Response.json(result ?? { ok: true }, { headers: privateHeaders });
   } catch (error) { return failure(error); }

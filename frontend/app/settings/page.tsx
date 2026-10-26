@@ -1,3 +1,3 @@
 import { redirect } from 'next/navigation';
 
-export default function SettingsPage() { redirect('/console'); }
+export default function SettingsPage() { redirect('/console/settings'); }

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { RecipeService, type RecipeDatabase } from '../features/recipes/services/recipe-service.ts';
 import { buildMemory, validDate } from '../features/recipes/domain.ts';
 import { parseCandidates } from '../features/recipes/services/generate-candidates.ts';
-import { authenticated, createSession, equalSecret, localDevelopment, requireSameOrigin, requireSecret, SESSION_COOKIE } from '../features/recipes/server/auth.ts';
+import { localDevelopment, requireSameOrigin } from '../features/recipes/server/auth.ts';
 import { todayJst } from '../features/morning-brief/server/jst-date.ts';
 
 function database() {
@@ -100,15 +100,50 @@ test('push is claimed once, no subscribers is failure rather than sent', async (
   const service=new RecipeService(db,undefined,{async send(){calls++;return {accepted:0,rejected:0};}});
   await Promise.all([service.pushToday(),service.pushToday()]);assert.equal(calls,1);assert.equal((await service.daily())?.pushStatus,'failed');sql.close();
 });
-test('session rejects forged admin headers, tampering, expiry, missing configuration and cross-origin writes', async () => {
-  const secret='a'.repeat(64),url='https://weave.example/api/internal/recipes';
-  assert.throws(()=>requireSecret(undefined));assert.equal(await authenticated(new Request(url,{headers:{'x-weave-client':'admin'}}),secret),false);
-  assert.equal(await equalSecret('bad',secret),false);assert.equal(await equalSecret(secret,secret),true);
-  const token=await createSession(secret);const req=(value:string)=>new Request(url,{headers:{cookie:`${SESSION_COOKIE}=${value}`}});
-  assert.equal(await authenticated(req(token),secret),true);assert.equal(await authenticated(req(token+'x'),secret),false);
-  assert.equal(await authenticated(req(token),secret,Date.now()+28801000),false);
+test('single-user routes retain same-origin write protection', () => {
+  const url='https://weave.example/api/internal/recipes';
   assert.throws(()=>requireSameOrigin(new Request(url,{headers:{origin:'https://evil.example'}})));
+  assert.throws(()=>requireSameOrigin(new Request(url)));
   requireSameOrigin(new Request(url,{headers:{origin:'https://weave.example'}}));
   assert.equal(localDevelopment(new Request('http://localhost:3000'),false),false);
   assert.equal(localDevelopment(new Request(url),true),false);
+  const loopback = new Request('http://localhost:3000/api/notification-preferences', { headers: { host:'127.0.0.1:3000', origin:'http://127.0.0.1:3000' } });
+  requireSameOrigin(loopback, true);
+  assert.throws(()=>requireSameOrigin(loopback, false));
+  assert.throws(()=>requireSameOrigin(new Request('http://localhost:3000', { headers: { host:'evil.example', origin:'http://evil.example' } }), true));
+});
+
+test('stopped recipe notifications remain pending and can be sent after restart', async () => {
+  const { sql, db, migrate }=database();migrate();const date=todayJst();let stopped=true;
+  try {
+    sql.prepare('INSERT INTO daily_recipe_recommendations(recommendation_date,candidates_json,generated_at) VALUES (?,?,?)').run(date,JSON.stringify(candidates),'now');
+    const service=new RecipeService(db,undefined,{async send(){return stopped?{accepted:0,rejected:0,skipped:true}:{accepted:1,rejected:0};}});
+    assert.equal((await service.pushToday())?.pushStatus,'pending');
+    stopped=false;
+    assert.equal((await service.pushToday())?.pushStatus,'sent');
+  } finally { sql.close(); }
+});
+
+test('stopped daily recipe blocks paid generation and push but preserves saved content', async () => {
+  const { sql, db, migrate }=database();migrate();let enabled=false,calls=0,pushes=0;
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>{calls++;return Response.json(output());};
+  try {
+    const service=new RecipeService(db,'test-key',{async send(){pushes++;return {accepted:1,rejected:0};}}, {async read(){return {morning_brief:true,daily_recipe:enabled};}});
+    await assert.rejects(service.getOrCreateDaily(),/功能已停止/);
+    await assert.rejects(service.getOrCreateDaily(true),/功能已停止/);
+    await assert.rejects(service.pushToday(),/功能已停止/);
+    assert.equal(calls,0);assert.equal(pushes,0);
+    assert.equal(await service.generationState(),null);
+    enabled=true;
+    const generated=await service.getOrCreateDaily();
+    assert.equal(calls,1);
+    enabled=false;
+    assert.equal((await service.daily())?.date,generated.date);
+    assert.equal((await service.getOrCreateDaily()).date,generated.date);
+    await assert.rejects(service.pushToday(),/功能已停止/);
+    assert.equal(calls,1);assert.equal(pushes,0);
+    enabled=true;
+    await service.pushToday();assert.equal(pushes,1);
+  } finally { globalThis.fetch=original;sql.close(); }
 });

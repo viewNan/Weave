@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { authenticated, localDevelopment, requireSameOrigin, requireSecret } from '../recipes/server/auth';
+import { requireSameOrigin } from '../recipes/server/auth';
 import { privateHeaders } from '../recipes/server/http';
 import { RecipeError } from '../recipes/domain';
 
@@ -7,16 +7,8 @@ type Database = NonNullable<CloudflareEnv['PUSH_SUBSCRIPTIONS_DB']>;
 
 export async function atlasRoute(request: Request, action: (db: Database) => Promise<unknown>) {
   try {
-    if (request.method !== 'GET') {
-      const local = localDevelopment(request, process.env.NODE_ENV === 'development');
-      const host = request.headers.get('host');
-      if (!(local && host && request.headers.get('origin') === `http://${host}`)) requireSameOrigin(request);
-    }
+    if (request.method !== 'GET') requireSameOrigin(request);
     const { env } = await getCloudflareContext({ async: true });
-    if (!localDevelopment(request, process.env.NODE_ENV === 'development') &&
-      !await authenticated(request, requireSecret(env.EAT_ADMIN_TOKEN))) {
-      return Response.json({ error: '请先解锁 Atlas。' }, { status: 401, headers: privateHeaders });
-    }
     if (!env.PUSH_SUBSCRIPTIONS_DB) return Response.json({ error: 'Atlas 数据库未配置。' }, { status: 503, headers: privateHeaders });
     return Response.json(await action(env.PUSH_SUBSCRIPTIONS_DB), { headers: privateHeaders });
   } catch (error) {

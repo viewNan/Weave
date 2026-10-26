@@ -8,6 +8,3 @@ VAPID_SUBJECT=mailto:you@example.com
 INTERNAL_API_TOKEN=
 # Daily recipe generation (server only).
 OPENAI_API_KEY=
-# Production Eat access: generate a random value of at least 32 characters.
-# Local loopback next dev does not require this login; never expose dev to the internet.
-EAT_ADMIN_TOKEN=

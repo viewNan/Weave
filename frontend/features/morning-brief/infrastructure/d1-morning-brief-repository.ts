@@ -11,9 +11,15 @@ const parse = <T>(value:string|null, fallback:T):T => { try { return value ? JSO
 const row = (value:BriefRow):Brief => ({ date:value.brief_date,title:value.title,speechText:value.speech_text,categories:parse<CategoryId[]>(value.categories_json,[]),sources:parse<string[]>(value.sources_json,[]),items:parse<EditorialItem[]>(value.items_json,[]),generatedAt:value.generated_at,updatedAt:value.updated_at,manuallyEditedAt:value.manually_edited_at,shortcutLastAccessedAt:value.shortcut_last_accessed_at,pushStatus:value.push_status,pushAccepted:value.push_accepted,pushRejected:value.push_rejected,pushInvalidated:value.push_invalidated,pushSentAt:value.push_sent_at });
 
 export class D1MorningBriefRepository implements MorningBriefRepository {
-  constructor(private db:D1) {}
+  private db:D1;
+  constructor(db:D1) { this.db=db; }
   async find(date:string){const value=await this.db.prepare('SELECT * FROM morning_briefs WHERE brief_date=?').bind(date).first<BriefRow>();return value?row(value):null;}
   async insert(brief:Brief){await this.db.prepare('INSERT INTO morning_briefs (brief_date,title,speech_text,categories_json,sources_json,items_json,generated_at,updated_at,manually_edited_at,shortcut_last_accessed_at,push_status,push_accepted,push_rejected,push_invalidated,push_sent_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(brief.date,brief.title,brief.speechText,JSON.stringify(brief.categories),JSON.stringify(brief.sources),JSON.stringify(brief.items),brief.generatedAt,brief.updatedAt,brief.manuallyEditedAt,brief.shortcutLastAccessedAt,brief.pushStatus,brief.pushAccepted,brief.pushRejected,brief.pushInvalidated,brief.pushSentAt).run();}
+  async replace(brief:Brief, expectedUpdatedAt:string) {
+    const result=await this.db.prepare("UPDATE morning_briefs SET title=?,speech_text=?,categories_json=?,sources_json=?,items_json=?,generated_at=?,updated_at=?,manually_edited_at=NULL,push_status='pending',push_accepted=0,push_rejected=0,push_invalidated=0,push_sent_at=NULL WHERE brief_date=? AND updated_at=?")
+      .bind(brief.title,brief.speechText,JSON.stringify(brief.categories),JSON.stringify(brief.sources),JSON.stringify(brief.items),brief.generatedAt,brief.updatedAt,brief.date,expectedUpdatedAt).run() as D1Result;
+    return (result.meta?.changes??0)===1;
+  }
   async updateSpeechText(date:string,text:string,at:string){await this.db.prepare('UPDATE morning_briefs SET speech_text=?,updated_at=?,manually_edited_at=? WHERE brief_date=?').bind(text,at,at,date).run();return this.find(date);}
   async markShortcutAccessed(date:string,at:string){await this.db.prepare('UPDATE morning_briefs SET shortcut_last_accessed_at=? WHERE brief_date=?').bind(at,date).run();}
   async updatePush(date:string,result:{status:string;accepted:number;rejected:number;invalidated:number;sentAt:string|null}){await this.db.prepare('UPDATE morning_briefs SET push_status=?,push_accepted=?,push_rejected=?,push_invalidated=?,push_sent_at=? WHERE brief_date=?').bind(result.status,result.accepted,result.rejected,result.invalidated,result.sentAt,date).run();}

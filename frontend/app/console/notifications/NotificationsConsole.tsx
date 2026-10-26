@@ -7,9 +7,10 @@ import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Textarea } from '../../../components/ui/textarea';
+import ActivityNotificationSettings from '../../../features/push/ui/ActivityNotificationSettings';
 
 type Status = 'Unsupported' | 'Not enabled' | 'Enabled' | 'Denied';
-type SendResult = { accepted?: number; rejected?: number; invalidated?: number; error?: string };
+type SendResult = { accepted?: number; rejected?: number; invalidated?: number; skipped?: boolean; error?: string };
 const toBytes = (value: string) => Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/').padEnd(Math.ceil(value.length / 4) * 4, '=')), char => char.charCodeAt(0));
 
 export default function NotificationsConsole() {
@@ -74,7 +75,8 @@ export default function NotificationsConsole() {
   };
 
   return <div className="mx-auto w-full max-w-4xl space-y-6 p-6 md:p-10">
-    <div><h1 className="text-3xl font-semibold tracking-tight">Notifications</h1><p className="mt-2 text-muted-foreground">编写、预览并发送 Web Push 通知。</p></div>
+    <div><h1 className="text-3xl font-semibold tracking-tight">设置</h1><p className="mt-2 text-muted-foreground">管理每日功能、AI API 使用和设备通知。</p></div>
+    <ActivityNotificationSettings />
     <Card>
       <CardHeader><CardTitle>自定义推送</CardTitle><CardDescription>输入时下方会实时预览；发送后会推送给所有已订阅的设备。</CardDescription></CardHeader>
       <CardContent>

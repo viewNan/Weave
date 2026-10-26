@@ -90,16 +90,27 @@ npx wrangler d1 migrations apply weave-push-production --local
 
 Use `.dev.vars.example` as the configuration reference. `OPENAI_API_KEY` enables
 generation; missing configuration or provider failures never produce mock menus.
-Production also requires an unpredictable `EAT_ADMIN_TOKEN` of at least 32
-characters, supplied as a Worker Secret, never committed. The unlock form creates
-an eight-hour signed HttpOnly session; mutating requests require the same Origin.
-Only loopback `next dev` bypasses login. Production fails closed if the secret is
-missing. This protects Eat routes, not the entire Console or other existing APIs.
+Eat and Atlas open directly in the personal single-user Console without an
+access key. Mutating requests still require the same Origin.
 
-Before publishing this version, back up the target database, configure the secret,
-apply `0006_recipe_reliability.sql` to the intended remote database, build, and
-verify unauthorized requests are denied. Local migration does not migrate remote
-D1. No deployment is implied by these instructions.
+Morning Brief and Daily Recipe feature switches are managed at `/console/settings`
+and persisted in D1. Apply `0012_notification_preferences.sql` before running this
+version. Stopping either feature skips its scheduled generation and push, blocks
+manual AI generation and push, and preserves existing content for reading.
+Requests already sent to the AI provider cannot be recalled by this switch.
+
+Morning Brief V3 uses the user-supplied global-news editorial prompt verbatim.
+New results contain 1–12 ranked stories (usually 8–12). The server derives the
+saved title from the first story and normalizes the opening using the actual
+story count. Cached records and manually edited text are not rewritten.
+One combined push previews the saved headline and up to three further stories;
+notification formatting never calls the model. The existing 06:30 JST schedule,
+generation lock, five-minute timeout and feature switch remain in place.
+Generation requires completed web search and nonempty valid source URLs, but
+source relevance and factual accuracy are not independently verified in code.
+The output ceiling is 12,000 tokens to accommodate the longer text and duplicated
+structured summaries; this is a ceiling, not a guaranteed spend or target length.
+Local migration does not migrate remote D1. No deployment is implied.
 
 - Recommendations and actual meals are independent. One active main meal per
   date is enforced in SQL. Clearing archives it; duplicate legacy rows are also
