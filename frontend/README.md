@@ -99,7 +99,14 @@ version. Stopping either feature skips its scheduled generation and push, blocks
 manual AI generation and push, and preserves existing content for reading.
 Requests already sent to the AI provider cannot be recalled by this switch.
 
-Morning Brief V3 uses the user-supplied global-news editorial prompt verbatim.
+This repository contains neutral example prompts for demonstration. Actual
+editorial prompts, recipe instructions and food preferences are kept in the
+independent private repository and are not imported into public builds.
+The demonstration project builds and tests without access to that repository.
+Connecting private configuration to a deployment is a separate task; do not
+copy personal prompt contents back into tracked public source files.
+
+Morning Brief V3 retains deterministic title and opening normalization.
 New results contain 1–12 ranked stories (usually 8–12). The server derives the
 saved title from the first story and normalizes the opening using the actual
 story count. Cached records and manually edited text are not rewritten.

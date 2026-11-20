@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createHash } from 'node:crypto';
 import { EDITORIAL_RULES, RUNTIME_PROMPT } from '../features/morning-brief/config/editorial-policy.ts';
 import { validateGeneratedBrief } from '../features/morning-brief/services/validate-generated-brief.ts';
 import { briefNotification } from '../features/morning-brief/services/brief-notification.ts';
@@ -11,10 +10,10 @@ const news=(count:number)=>Array.from({length:count},(_,index)=>({category:'inte
 const raw=(count:number)=>({title:'今日十大新闻',speechText:news(count).map(item=>`${item.headline}\n${item.summary}`).join('\n\n'),items:news(count)});
 const saved=(count:number):Brief=>({...validateGeneratedBrief(raw(count)),date:'2026-10-26',generatedAt:'now',updatedAt:'now',manuallyEditedAt:null,shortcutLastAccessedAt:null,pushStatus:'pending',pushAccepted:0,pushRejected:0,pushInvalidated:0,pushSentAt:null});
 
-test('editorial and runtime prompts exactly match the user-supplied V3 text',()=>{
-  // SHA-256 values computed from the supplied sections, excluding boundary blank lines.
-  assert.equal(createHash('sha256').update(EDITORIAL_RULES).digest('hex'),'4122d9ea501c7096f05971c393d9ced792425e6744a36527710ac5f2a0a55269');
-  assert.equal(createHash('sha256').update(RUNTIME_PROMPT).digest('hex'),'185dc07ca465cdf6e1959ba80839a21245de54ea4cd97280dd610131629d7297');
+test('public examples provide the runtime inputs without personal editorial requirements',()=>{
+  assert.ok(EDITORIAL_RULES.trim());
+  for(const field of ['reportDateJST','currentTimeJST','historyEvents'])assert.ok(RUNTIME_PROMPT.includes(`{{${field}}}`));
+  assert.doesNotMatch(EDITORIAL_RULES,/京都|关西|用户住在|私人晨报编辑/);
 });
 
 for(const count of [8,10,12])test(`${count} news items determine the headline and a single exact opening`,()=>{
