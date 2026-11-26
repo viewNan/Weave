@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '../../shared/i18n/LanguageProvider';
 
 import { useEffect, useRef, useState } from 'react';
 import { createShapeId, getSnapshot, loadSnapshot, Tldraw, toRichText, type Editor, type TLShape } from 'tldraw';
@@ -37,9 +38,12 @@ function drawRelation(editor: Editor, id: string, from: string, to: string, hidd
 }
 
 export default function AtlasEditor({ mapId }: { mapId: string }) {
+  const { t, language } = useLanguage();
+
   const [map, setMap] = useState<AtlasMap | null>(null);
   const [document, setDocument] = useState<AtlasDocument | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
+  useEffect(() => { editor?.user.updateUserPreferences({ locale: language === 'en' ? 'en' : 'zh-cn' }); }, [editor, language]);
   const [nodes, setNodes] = useState<AtlasNode[]>([]);
   const [edges, setEdges] = useState<AtlasEdge[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -110,7 +114,7 @@ export default function AtlasEditor({ mapId }: { mapId: string }) {
         requestAnimationFrame(() => instance.zoomToFit());
       }
       setEditor(instance);
-    } catch { setError('画布数据无法读取，请先保存原始数据后再继续。'); return; }
+    } catch { setError(t("画布数据无法读取，请先保存原始数据后再继续。")); return; }
     const changes = instance.store.listen(entry => {
       const removed = new Set(Object.keys(entry.changes.removed));
       if (removed.size) {
@@ -272,7 +276,7 @@ export default function AtlasEditor({ mapId }: { mapId: string }) {
     setSaving(true); setError('');
     const before = changeCount.current;
     const kept = nodes.filter(node => editor.getShape(createShapeId(node.id)));
-    if (kept.some(node => !node.title.trim())) { setError('节点标题不能为空。'); setSaving(false); return; }
+    if (kept.some(node => !node.title.trim())) { setError(t("节点标题不能为空。")); setSaving(false); return; }
     const ids = new Set(kept.map(node => node.id));
     const keptEdges = edges.filter(edge => ids.has(edge.from) && ids.has(edge.to) && editor.getShape(createShapeId(edge.id)));
     const layout = kept.flatMap(node => {
@@ -297,18 +301,18 @@ export default function AtlasEditor({ mapId }: { mapId: string }) {
     finally { setSaving(false); }
   }
 
-  if (!map || !document) return <p role={error ? 'alert' : undefined} className="p-6 text-sm text-muted-foreground">{error || '正在读取 Atlas…'}</p>;
+  if (!map || !document) return <p role={error ? 'alert' : undefined} className="p-6 text-sm text-muted-foreground">{error || t("正在读取 Atlas…")}</p>;
 
   return <div className="flex h-[calc(100svh-7rem)] min-h-[540px] flex-col">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div><a href="/console/atlas" className="text-xs text-muted-foreground hover:underline">← Atlas Library</a><h2 role="heading" aria-level={1} className="text-lg font-semibold">{map.title}</h2></div><div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">{saving ? '保存中…' : dirty ? '未保存' : '已保存'}</span><Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>保存画布</Button></div></header>
-    {error && <p role="alert" className="shrink-0 px-4 py-2 text-sm text-destructive">{error}</p>}
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div><a href="/console/atlas" className="text-xs text-muted-foreground hover:underline">← Atlas Library</a><h2 role="heading" aria-level={1} className="text-lg font-semibold">{map.title}</h2></div><div className="flex items-center gap-3"><span className="text-xs text-muted-foreground">{saving ? t("保存中…") : dirty ? t("未保存") : t("已保存")}</span><Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>{t("保存画布")}</Button></div></header>
+    {error && <p role="alert" className="shrink-0 px-4 py-2 text-sm text-destructive">{t(error)}</p>}
     <div className="flex min-h-0 flex-1 flex-col md:flex-row"><div className="relative h-[380px] shrink-0 overflow-hidden md:h-full md:min-w-0 md:flex-1"><Tldraw onMount={mounted} getShapeVisibility={shapeVisibility} components={canvasComponents} /></div>
       <aside className="max-h-[40vh] w-full shrink-0 space-y-5 overflow-y-auto border-l p-4 text-sm md:max-h-none md:w-72">
-        <section className="space-y-2"><h2 className="font-semibold">搜索节点</h2><Input aria-label="搜索节点" placeholder="标题或说明" value={search} onChange={event => setSearch(event.target.value)} />{matches.slice(0, 12).map(node => <button key={node.id} type="button" className="block w-full rounded-md border px-3 py-2 text-left hover:bg-muted" onClick={() => focusNode(node.id)}><span className="block truncate font-medium">{node.title}</span><span className="block truncate text-xs text-muted-foreground">{node.summary || node.type}</span></button>)}{search && !matches.length && <p className="text-xs text-muted-foreground">没有匹配节点。</p>}</section>
-        <form className="space-y-2 border-t pt-4" onSubmit={addNode}><h2 className="font-semibold">新建节点</h2><select className={selectClass} aria-label="节点类型" value={type} onChange={event => setType(event.target.value as AtlasNodeType)}>{nodeTypes.map(value => <option key={value} value={value}>{value}</option>)}</select><Input aria-label="节点标题" placeholder="标题" value={title} maxLength={100} onChange={event => setTitle(event.target.value)} required /><Input aria-label="节点说明" placeholder="一句话说明" value={summary} maxLength={300} onChange={event => setSummary(event.target.value)} /><select className={selectClass} aria-label="父节点" value={parentId} onChange={event => setParentId(event.target.value)}><option value="">独立节点</option>{nodes.map(node => <option key={node.id} value={node.id}>属于：{node.title}</option>)}</select><Button size="sm" disabled={!title.trim()}>添加节点</Button></form>
-        {selected && <section className="space-y-2 border-t pt-4"><h2 className="font-semibold">编辑节点</h2><select className={selectClass} aria-label="编辑节点类型" value={selected.type} onChange={event => editNode({ type: event.target.value as AtlasNodeType })}>{nodeTypes.map(value => <option key={value}>{value}</option>)}</select><Input aria-label="编辑节点标题" value={selected.title} maxLength={100} onChange={event => editNode({ title: event.target.value })} /><Input aria-label="编辑节点说明" value={selected.summary} maxLength={300} onChange={event => editNode({ summary: event.target.value })} /><textarea className="min-h-20 w-full rounded-md border border-input bg-background p-2 text-sm" aria-label="节点笔记" placeholder="笔记" maxLength={2000} value={selected.notes} onChange={event => editNode({ notes: event.target.value })} /><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => focusNode(selected.id)}>聚焦</Button>{children.length > 0 && <Button variant="outline" size="sm" onClick={toggleSelected}>{selected.collapsed ? '展开' : '折叠'} {children.length} 个子节点</Button>}<Button variant="outline" size="sm" onClick={deleteNode}>删除节点</Button></div></section>}
-        <form className="space-y-2 border-t pt-4" onSubmit={connect}><h2 className="font-semibold">连接节点</h2><select className={selectClass} aria-label="起点" value={from} onChange={event => setFrom(event.target.value)}><option value="">起点</option>{nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select><select className={selectClass} aria-label="终点" value={to} onChange={event => setTo(event.target.value)}><option value="">终点</option>{nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select><select className={selectClass} aria-label="关系" value={relation} onChange={event => setRelation(event.target.value as AtlasEdgeType)}>{edgeTypes.map(value => <option key={value}>{value}</option>)}</select><Button size="sm" disabled={!from || !to || from === to}>建立关系</Button></form>
-        {edges.length > 0 && <section className="space-y-2 border-t pt-4"><h2 className="font-semibold">关系</h2>{edges.map(edge => <div key={edge.id} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{nodes.find(node => node.id === edge.from)?.title} → {nodes.find(node => node.id === edge.to)?.title} · {edge.type}</span><button type="button" className="text-destructive" aria-label="删除关系" onClick={() => editor?.deleteShape(createShapeId(edge.id))}>删除</button></div>)}</section>}
+        <section className="space-y-2"><h2 className="font-semibold">{t("搜索节点")}</h2><Input aria-label={t("搜索节点")} placeholder={t("标题或说明")} value={search} onChange={event => setSearch(event.target.value)} />{matches.slice(0, 12).map(node => <button key={node.id} type="button" className="block w-full rounded-md border px-3 py-2 text-left hover:bg-muted" onClick={() => focusNode(node.id)}><span className="block truncate font-medium">{node.title}</span><span className="block truncate text-xs text-muted-foreground">{node.summary || node.type}</span></button>)}{search && !matches.length && <p className="text-xs text-muted-foreground">{t("没有匹配节点。")}</p>}</section>
+        <form className="space-y-2 border-t pt-4" onSubmit={addNode}><h2 className="font-semibold">{t("新建节点")}</h2><select className={selectClass} aria-label={t("节点类型")} value={type} onChange={event => setType(event.target.value as AtlasNodeType)}>{nodeTypes.map(value => <option key={value} value={value}>{value}</option>)}</select><Input aria-label={t("节点标题")} placeholder={t("标题")} value={title} maxLength={100} onChange={event => setTitle(event.target.value)} required /><Input aria-label={t("节点说明")} placeholder={t("一句话说明")} value={summary} maxLength={300} onChange={event => setSummary(event.target.value)} /><select className={selectClass} aria-label={t("父节点")} value={parentId} onChange={event => setParentId(event.target.value)}><option value="">{t("独立节点")}</option>{nodes.map(node => <option key={node.id} value={node.id}>{t("属于：")}{node.title}</option>)}</select><Button size="sm" disabled={!title.trim()}>{t("添加节点")}</Button></form>
+        {selected && <section className="space-y-2 border-t pt-4"><h2 className="font-semibold">{t("编辑节点")}</h2><select className={selectClass} aria-label={t("编辑节点类型")} value={selected.type} onChange={event => editNode({ type: event.target.value as AtlasNodeType })}>{nodeTypes.map(value => <option key={value}>{value}</option>)}</select><Input aria-label={t("编辑节点标题")} value={selected.title} maxLength={100} onChange={event => editNode({ title: event.target.value })} /><Input aria-label={t("编辑节点说明")} value={selected.summary} maxLength={300} onChange={event => editNode({ summary: event.target.value })} /><textarea className="min-h-20 w-full rounded-md border border-input bg-background p-2 text-sm" aria-label={t("节点笔记")} placeholder={t("笔记")} maxLength={2000} value={selected.notes} onChange={event => editNode({ notes: event.target.value })} /><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => focusNode(selected.id)}>{t("聚焦")}</Button>{children.length > 0 && <Button variant="outline" size="sm" onClick={toggleSelected}>{selected.collapsed ? t("展开") : t("折叠")} {children.length} {t("个子节点")}</Button>}<Button variant="outline" size="sm" onClick={deleteNode}>{t("删除节点")}</Button></div></section>}
+        <form className="space-y-2 border-t pt-4" onSubmit={connect}><h2 className="font-semibold">{t("连接节点")}</h2><select className={selectClass} aria-label={t("起点")} value={from} onChange={event => setFrom(event.target.value)}><option value="">{t("起点")}</option>{nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select><select className={selectClass} aria-label={t("终点")} value={to} onChange={event => setTo(event.target.value)}><option value="">{t("终点")}</option>{nodes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select><select className={selectClass} aria-label={t("关系")} value={relation} onChange={event => setRelation(event.target.value as AtlasEdgeType)}>{edgeTypes.map(value => <option key={value}>{value}</option>)}</select><Button size="sm" disabled={!from || !to || from === to}>{t("建立关系")}</Button></form>
+        {edges.length > 0 && <section className="space-y-2 border-t pt-4"><h2 className="font-semibold">{t("关系")}</h2>{edges.map(edge => <div key={edge.id} className="flex items-center justify-between gap-2 text-xs"><span className="min-w-0 truncate">{nodes.find(node => node.id === edge.from)?.title} → {nodes.find(node => node.id === edge.to)?.title} · {edge.type}</span><button type="button" className="text-destructive" aria-label={t("删除关系")} onClick={() => editor?.deleteShape(createShapeId(edge.id))}>{t("删除")}</button></div>)}</section>}
       </aside></div>
   </div>;
 }

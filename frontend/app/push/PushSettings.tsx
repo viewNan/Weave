@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '../../shared/i18n/LanguageProvider';
 
 import { useEffect, useState } from 'react';
 
@@ -6,6 +7,8 @@ type Status = 'Unsupported' | 'Not enabled' | 'Enabled' | 'Denied';
 const base64UrlToBytes = (value: string) => Uint8Array.from(atob(value.replaceAll('-', '+').replaceAll('_', '/').padEnd(Math.ceil(value.length / 4) * 4, '=')), (char) => char.charCodeAt(0));
 
 export default function PushSettings() {
+  const { t } = useLanguage();
+
   const [status, setStatus] = useState<Status>('Unsupported');
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [message, setMessage] = useState('');
@@ -34,8 +37,8 @@ export default function PushSettings() {
       if (!response.ok) throw new Error((await response.json()).error || 'Unable to save the subscription.');
       setSubscription(current);
       setStatus('Enabled');
-      setMessage('通知已开启。');
-    } catch (error) { setMessage(error instanceof Error ? error.message : '无法开启通知。'); }
+      setMessage(t("通知已开启。"));
+    } catch (error) { setMessage(error instanceof Error ? error.message : t("无法开启通知。")); }
   };
 
   const test = async () => {
@@ -44,15 +47,15 @@ export default function PushSettings() {
     const result = await response.json();
     setProviderStatus(result.providerStatus ?? null);
     setProviderBody(result.providerBody ?? null);
-    setMessage(result.accepted ? 'Push provider 已接受请求；系统通知是否送达仍取决于设备与 provider。' : result.error || result.providerBody || 'Push provider 拒绝了请求。');
+    setMessage(result.accepted ? t("Push provider 已接受请求；系统通知是否送达仍取决于设备与 provider。") : result.error || result.providerBody || t("Push provider 拒绝了请求。"));
   };
 
   return <main style={{ maxWidth: 560, margin: '4rem auto', padding: '0 1.5rem', fontFamily: 'system-ui, sans-serif' }}>
-    <a href="/">← 返回 Weave</a><h1>通知设置</h1><p>通知状态：<strong>{status}</strong></p>
-    {status === 'Unsupported' && <p>此浏览器不支持 Web Push。iPhone 需要 iOS 16.4+，并从主屏幕打开 Weave。</p>}
-    <p><button className="push-action" onClick={enable} disabled={status === 'Unsupported' || status === 'Enabled'}>开启通知</button>{' '}<button className="push-action" onClick={test} disabled={!subscription}>发送测试通知</button></p>
+    <a href="/">{t("← 返回 Weave")}</a><h1>{t("通知设置")}</h1><p>{t("通知状态：")}<strong>{t(status)}</strong></p>
+    {status === 'Unsupported' && <p>{t("此浏览器不支持 Web Push。iPhone 需要 iOS 16.4+，并从主屏幕打开 Weave。")}</p>}
+    <p><button className="push-action" onClick={enable} disabled={status === 'Unsupported' || status === 'Enabled'}>{t("开启通知")}</button>{' '}<button className="push-action" onClick={test} disabled={!subscription}>{t("发送测试通知")}</button></p>
     {providerStatus !== null && <p>Push provider status: <strong>{providerStatus}</strong></p>}
     {providerBody && <p>Push provider response: <code>{providerBody}</code></p>}
-    {message && <p aria-live="polite">{message}</p>}
+    {message && <p aria-live="polite">{t(message)}</p>}
   </main>;
 }
