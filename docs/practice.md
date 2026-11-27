@@ -7,6 +7,10 @@ The existing Console is directly accessible; same-origin validation is not a
 login system. Any deployment-level Cloudflare Access policy must cover both the
 Console page and `/api/internal/practice`.
 
+The current score, count display and **Start practice** rules are documented in
+[练习积分、统计与随机练习规则](practice-scoring.md). The bank keeps its original
+category order; only an explicitly started practice round is shuffled.
+
 ## Storage and release
 
 Apply `frontend/migrations/0013_practice.sql` to the existing D1 database before
@@ -83,6 +87,13 @@ characters per outline. These are storage limits, not a required outline length.
 - Statistics exclude archived questions and categories. Today's distinct-question
   count, total attempts, and latest-rating distribution are separate values.
   Search and filters change the list, not the practice-set totals.
+- Per-question lifetime counts derive from non-deleted history. Fluent progress
+  is 10 points per fluent attempt, capped at 100, with no daily cap. Counts are
+  available in one expansion; a failed attempt does not reduce earlier points.
+- Start practice creates a client-side shuffled round with latest-rating priority
+  (unable, hesitant, unrated, fluent). Rating a question moves it behind the
+  remaining questions for that round; returning to the bank restores category
+  order. This never overwrites stored item order or creates automatic attempts.
 
 ## Verification
 

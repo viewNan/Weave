@@ -22,12 +22,20 @@ export class PracticeService {
     if (setId && !sets.some(set => set.id === setId)) throw new PracticeError('找不到练习集。', 404);
     const groups = (await this.sql('SELECT * FROM practice_groups WHERE set_id=? ORDER BY sort_order,id', setId).all<PracticeGroup>()).results;
     const items = (await this.sql(`SELECT i.*,
+      COALESCE(c.total_count,0) total_count,COALESCE(c.fluent_count,0) fluent_count,
+      COALESCE(c.shaky_count,0) shaky_count,COALESCE(c.unknown_count,0) unknown_count,
       (SELECT COUNT(*) FROM practice_attempts a WHERE a.item_id=i.id AND a.study_day=? AND a.deleted=0) today_count,
       (SELECT a.id FROM practice_attempts a WHERE a.item_id=i.id AND a.study_day=? AND a.deleted=0 ORDER BY a.sequence DESC LIMIT 1) latest_id,
       (SELECT a.rating FROM practice_attempts a WHERE a.item_id=i.id AND a.study_day=? AND a.deleted=0 ORDER BY a.sequence DESC LIMIT 1) latest_rating,
       (SELECT a.rating FROM practice_attempts a WHERE a.item_id=i.id AND a.deleted=0 AND a.rating IS NOT NULL ORDER BY a.sequence DESC LIMIT 1) current_rating,
       (SELECT a.created_at FROM practice_attempts a WHERE a.item_id=i.id AND a.deleted=0 AND a.rating IS NOT NULL ORDER BY a.sequence DESC LIMIT 1) last_rated_at
-      FROM practice_items i JOIN practice_groups g ON g.id=i.group_id WHERE g.set_id=? ORDER BY i.sort_order,i.id`, day, day, day, setId).all<PracticeItem>()).results;
+      FROM practice_items i JOIN practice_groups g ON g.id=i.group_id
+      LEFT JOIN (SELECT item_id,COUNT(*) total_count,
+        SUM(CASE WHEN rating='fluent' THEN 1 ELSE 0 END) fluent_count,
+        SUM(CASE WHEN rating='shaky' THEN 1 ELSE 0 END) shaky_count,
+        SUM(CASE WHEN rating='unknown' THEN 1 ELSE 0 END) unknown_count
+        FROM practice_attempts WHERE deleted=0 GROUP BY item_id) c ON c.item_id=i.id
+      WHERE g.set_id=? ORDER BY i.sort_order,i.id`, day, day, day, setId).all<PracticeItem>()).results;
     return { sets, setId, groups, items, day };
   }
   async history(itemId: string) {

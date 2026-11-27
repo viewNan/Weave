@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import test from 'node:test';
-import { normalized, PracticeError, statistics, studyDay, nextStudyDayDelay } from '../features/practice/domain.ts';
+import { fluentProgress, normalized, orderedPracticeItems, PracticeError, practicePriority, refreshPracticeRound, startPracticeRound, statistics, studyDay, nextStudyDayDelay, type PracticeItem, type Rating } from '../features/practice/domain.ts';
 import { parseImport } from '../features/practice/import-format.ts';
 import { PracticeService, type PracticeDatabase, type Statement } from '../features/practice/service.ts';
 import { requireSameOrigin } from '../features/recipes/server/auth.ts';
@@ -187,4 +187,78 @@ test('manual content editing, ordering and archive restore retain whole outlines
   await service.saveItem({ id, groupId, prompt: 'Renamed question', outline, revision: 1, archived: false });
   dashboard = await service.dashboard(String(setId));
   assert.equal(dashboard.items[0].archived, 0); assert.equal(dashboard.items[0].outline, outline);
+});
+
+test('whole-history counters and positive progress derive from valid attempts, including unrated ones', async t => {
+  const { fresh, record, service } = await fixture(t);
+  const sequence = ['fluent', 'unknown', 'fluent', 'shaky', 'unknown', 'fluent', 'unknown', 'shaky', 'fluent', 'unknown', 'unknown'];
+  for (const [index, value] of sequence.entries()) {
+    if (index) await record('again');
+    await record('rate', value);
+  }
+  let item = await fresh();
+  assert.equal(item.total_count, 11); assert.equal(item.fluent_count, 4); assert.equal(item.shaky_count, 2); assert.equal(item.unknown_count, 5);
+  assert.deepEqual(fluentProgress(item), { score: 40, remaining: 6, status: 'learning' });
+  await record('check'); assert.equal((await fresh()).total_count, 11);
+  await record('again'); item = await fresh();
+  assert.equal(item.total_count, 12); assert.equal(item.fluent_count, 4);
+  const latest = (await service.history(item.id))[0];
+  await service.changeAttempt({ itemId: item.id, attemptId: latest.id, revision: item.revision, deleted: 1 });
+  assert.equal((await fresh()).total_count, 11);
+});
+
+test('rating corrections, undo, deletion and restoration recalculate points without duplicate rewards', async t => {
+  const { fresh, record, service } = await fixture(t);
+  await record('check'); await record('rate', 'fluent'); await record('rate', 'fluent');
+  let item = await fresh(); assert.equal(item.fluent_count, 1); assert.equal(fluentProgress(item).score, 10);
+  const { undo } = await record('rate', 'unknown'); assert.ok(undo);
+  assert.equal(fluentProgress(await fresh()).score, 0);
+  await service.changeAttempt(undo); item = await fresh();
+  assert.equal(fluentProgress(item).score, 10); assert.equal(item.total_count, 1);
+  const attempt = (await service.history(item.id))[0];
+  const deleted = await service.changeAttempt({ itemId: item.id, attemptId: attempt.id, revision: item.revision, deleted: 1 });
+  assert.equal(fluentProgress(await fresh()).score, 0);
+  await service.changeAttempt(deleted.undo); assert.equal(fluentProgress(await fresh()).score, 10);
+});
+
+test('points cap at 100; later failed attempts preserve points and change status to review', async t => {
+  const { fresh, record } = await fixture(t);
+  for (let index = 0; index < 11; index++) { if (index) await record('again'); await record('rate', 'fluent'); }
+  assert.deepEqual(fluentProgress(await fresh()), { score: 100, remaining: 0, status: 'passed' });
+  await record('again'); await record('rate', 'unknown');
+  assert.deepEqual(fluentProgress(await fresh()), { score: 100, remaining: 0, status: 'review' });
+  await record('rate', 'shaky'); assert.equal(fluentProgress(await fresh()).score, 100);
+  await record('rate', 'fluent'); assert.equal(fluentProgress(await fresh()).status, 'passed');
+});
+
+test('rounds prioritize ratings across categories and shuffle within every tier without mutating the bank', async t => {
+  const { fresh } = await fixture(t), base = await fresh();
+  const create = (id: string, rating: Rating | null): PracticeItem => ({ ...base, id, group_id: id, current_rating: rating });
+  const bank = [create('f1', 'fluent'), create('u1', 'unknown'), create('s1', 'shaky'), create('n1', null),
+    create('u2', 'unknown'), create('s2', 'shaky'), create('n2', null), create('f2', 'fluent')];
+  const original = bank.map(item => item.id);
+  const round = startPracticeRound(bank, 'set', '2026-11-27', () => 0);
+  const second = startPracticeRound(bank, 'set', '2026-11-27', () => .999);
+  const ordered = orderedPracticeItems(bank, round);
+  assert.deepEqual(ordered.map(item => practicePriority(item.current_rating)), [0, 0, 1, 1, 2, 2, 3, 3]);
+  assert.notDeepEqual(round.order, second.order);
+  assert.equal(new Set(round.order).size, bank.length); assert.deepEqual(bank.map(item => item.id), original);
+  assert.deepEqual(orderedPracticeItems(bank, null).map(item => item.id), original);
+});
+
+test('a round stays stable across refreshes; only rated items move behind remaining items and undo restores place', async t => {
+  const { fresh } = await fixture(t), base = await fresh();
+  const bank = ['a', 'b', 'c'].map(id => ({ ...base, id, current_rating: 'unknown' as const }));
+  const round = startPracticeRound(bank, 'set', '2026-11-27', () => .999);
+  const changed = bank.map(item => item.id === 'a' ? { ...item, current_rating: 'fluent' as const } : item);
+  const refreshed = refreshPracticeRound(round, changed, 'set', round.day);
+  assert.deepEqual(refreshed.order, round.order);
+  const completed = { ...refreshed, completed: ['a'] };
+  assert.deepEqual(orderedPracticeItems(changed, completed).map(item => item.id), ['b', 'c', 'a']);
+  assert.deepEqual(orderedPracticeItems(changed, { ...completed, completed: [] }).map(item => item.id), round.order);
+  const expanded = refreshPracticeRound(completed, [...changed, { ...base, id: 'new' }], 'set', round.day);
+  assert.deepEqual(expanded.order, ['a', 'b', 'c', 'new']);
+  assert.deepEqual(refreshPracticeRound(completed, changed.slice(1), 'set', round.day).completed, []);
+  assert.deepEqual(refreshPracticeRound(completed, changed, 'other', round.day).completed, []);
+  assert.deepEqual(refreshPracticeRound(completed, changed, 'set', '2026-11-28').completed, []);
 });
