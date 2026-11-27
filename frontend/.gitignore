@@ -6,4 +6,7 @@ node_modules/
 .wrangler/
 .dev.vars*
 !.dev.vars.example
+wrangler.jsonc
+wrangler.toml
+wrangler.local.*
 

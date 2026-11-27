@@ -21,6 +21,10 @@ npm run build
 
 ## Cloudflare Workers deployment spike
 
+Actual deployment configuration is local-only and ignored by Git. Copy
+`wrangler.example.jsonc` to `wrangler.jsonc` and fill in your own resources when
+configuring an instance. Do not commit the populated file.
+
 The frontend is prepared for Cloudflare Workers through OpenNext. The existing
 Next.js development and production commands are unchanged; this adapter adds a
 separate Worker build without changing UI, mock data, or the Python backend.
@@ -157,7 +161,7 @@ For a trusted PC or automation, set `INTERNAL_API_TOKEN` as a Cloudflare Secret
 on the preview Worker, then call:
 
 ```sh
-curl -X POST https://weave-personal-planet-preview.ryujyonan.workers.dev/api/internal/notifications \
+curl -X POST https://your-worker.example.com/api/internal/notifications \
   -H "Authorization: Bearer $INTERNAL_API_TOKEN" \
   -H "Content-Type: application/json" \
   --data '{"title":"Weave","body":"PC-triggered test","url":"/push","type":"test"}'

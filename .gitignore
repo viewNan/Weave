@@ -12,3 +12,19 @@ backend/storage/*
 frontend/node_modules/
 frontend/.next/
 weave_private/
+
+# Local databases, exports and development runtime state
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.sql.gz
+*.sql.zip
+**/.wrangler/
+**/.wrangler-config/
+**/.env
+**/.env.*
+!**/.env.example

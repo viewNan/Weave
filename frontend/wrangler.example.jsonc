@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "weave-example",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "VAPID_PUBLIC_KEY": "",
+    "VAPID_SUBJECT": "mailto:you@example.com"
+  },
+  "d1_databases": [
+    {
+      "binding": "PUSH_SUBSCRIPTIONS_DB",
+      "database_name": "weave-example",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "env": {
+    "preview": {
+      "name": "weave-example-preview",
+      "vars": {
+        "VAPID_PUBLIC_KEY": "",
+        "VAPID_SUBJECT": "mailto:you@example.com"
+      },
+      "d1_databases": [
+        {
+          "binding": "PUSH_SUBSCRIPTIONS_DB",
+          "database_name": "weave-example-preview",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  },
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "30 21 * * *",
+      "0 9 * * *"
+    ]
+  }
+}

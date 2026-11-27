@@ -1,7 +1,7 @@
 'use client';
 import { LanguageSwitcher, useLanguage } from '../../shared/i18n/LanguageProvider';
 
-import { Archive, Bell, ChevronDown, Dices, FileText, LayoutDashboard, Map, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
+import { Archive, Bell, ChevronDown, ClipboardCheck, Dices, FileText, LayoutDashboard, Map, Menu, Settings, Sun, UtensilsCrossed, X } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '../../components/ui/button';
@@ -12,6 +12,7 @@ const nav = [
   { href: '/console', label: 'Overview', icon: LayoutDashboard },
   { href: '/console/morning-brief', label: 'Morning Brief', icon: Sun },
   { href: '/console/study', label: '活动转盘', icon: Dices },
+  { href: '/console/practice', label: '练习清单', icon: ClipboardCheck },
   { href: '/console/notifications', label: 'Notifications', icon: Bell },
   { href: '/console/files', label: 'Files', icon: FileText },
   { href: '/console/atlas', label: 'Atlas', icon: Map },
