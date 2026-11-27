@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Circle, Import, Pencil, Plus, RotateCcw, Settings2, Shuffle, Star, Trash2, Triangle, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Circle, Import, Pencil, Plus, RotateCcw, Settings2, Shuffle, Star, Trash2, Triangle, X } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Checkbox } from '../../../components/ui/checkbox';
@@ -11,6 +11,7 @@ import { Textarea } from '../../../components/ui/textarea';
 import { useLanguage } from '../../../shared/i18n/LanguageProvider';
 import { fluentProgress, nextStudyDayDelay, orderedPracticeItems, ratingLabels, ratings, refreshPracticeRound, startPracticeRound, statistics, type Attempt, type Dashboard, type PracticeGroup, type PracticeItem, type PracticeRound, type Rating, type Undo } from '../domain';
 import { importInstructions, parseImport, type ImportResult } from '../import-format';
+import { PracticeBank, PracticeRoundView } from './PracticeViews';
 
 type Filter = 'all' | Rating | 'unrated' | 'unpracticed' | 'starred';
 type Preview = ImportResult & { added: number; skipped: number; changed: number; imported: boolean };
@@ -37,6 +38,7 @@ export default function PracticeWorkspace() {
   const [historyId, setHistoryId] = useState<string | null>(null), [attempts, setAttempts] = useState<Attempt[] | null>(null);
   const [source, setSource] = useState(''), [preview, setPreview] = useState<Preview | null>(null);
   const [setName, setSetName] = useState(''), [groupName, setGroupName] = useState('');
+  const workspaceRef = useRef<HTMLElement>(null);
   const load = useCallback(async (setId = selectedSet.current) => {
     const version = ++loadVersion.current;
     const next = await request<Dashboard>(`${endpoint}${setId ? `?setId=${encodeURIComponent(setId)}` : ''}`);
@@ -116,7 +118,9 @@ export default function PracticeWorkspace() {
       setRound(current => current && !current.completed.includes(item.id) ? { ...current, completed: [...current.completed, item.id] } : current);
       const updated = next.items.find(value => value.id === item.id);
       if (updated) setNotice(t('已记录：流畅进度 {0} → {1}。', fluentProgress(item).score, fluentProgress(updated).score));
+      if (round) requestAnimationFrame(() => workspaceRef.current?.closest('main')?.scrollTo({ top: 0 }));
     }
+    return next;
   }
   function editItem(item?: PracticeItem, groupId = activeGroups[0]?.id ?? '') {
     setEditor(item ? { id: item.id, groupId: item.group_id, prompt: item.prompt, outline: item.outline, sortOrder: item.sort_order, starred: !!item.starred, archived: !!item.archived, revision: item.revision }
@@ -144,35 +148,31 @@ export default function PracticeWorkspace() {
   }
   const dialog = (title: string, onClose: () => void, children: React.ReactNode) => <Dialog title={title} closeLabel={t('关闭')} onClose={() => { if (!busy) onClose(); }}>{error && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{t(error)}</p>}{notice === '已复制。' && <p role="status" className="text-sm text-muted-foreground">{t(notice)}</p>}{children}</Dialog>;
 
-  return <section className="mx-auto w-full max-w-5xl space-y-5 p-4 pb-28 sm:p-6 sm:pb-28">
-    <header className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="m-0 text-2xl font-semibold tracking-tight">{t('练习清单')}</h1><p className="mt-1 text-sm text-muted-foreground">{t('记录每次练习，看见掌握的变化。')}</p></div><div className="flex gap-2">
-      <Button variant="outline" className="min-h-11" disabled={busy || !data?.setId} onClick={() => { setModal('import'); setPreview(null); }}><Import size={16}/>{t('导入')}</Button>
-      <Button variant="outline" className="min-h-11" disabled={busy || !data} onClick={() => { setSetName(''); setModal('manage'); }}><Settings2 size={16}/>{t('管理')}</Button>
+  const actions = { busy, onRecord: record, onHistory: openHistory, onStar: (item: PracticeItem) => { void mutate({ ...itemBody(item), starred: !item.starred }); } };
+  function startRound() {
+    if (!data) return;
+    setRound(startPracticeRound(activeItems, data.setId, data.day));
+    setNotice('');
+    requestAnimationFrame(() => workspaceRef.current?.closest('main')?.scrollTo({ top: 0 }));
+  }
+  function leaveRound() {
+    setRound(null); setNotice('');
+    requestAnimationFrame(() => workspaceRef.current?.closest('main')?.scrollTo({ top: 0 }));
+  }
+
+  return <section ref={workspaceRef} className="mx-auto w-full max-w-6xl space-y-4 p-4 pb-24 sm:p-6 sm:pb-24">
+    <header className="flex items-center justify-between gap-3"><div className="min-w-0"><h1 className="m-0 text-xl font-semibold tracking-tight sm:text-2xl">{t(round ? '练习模式' : '练习清单')}</h1><p className="mt-1 hidden text-sm text-muted-foreground sm:block">{round ? data?.sets.find(set => set.id === data.setId)?.name : t('记录每次练习，看见掌握的变化。')}</p></div><div className="flex shrink-0 gap-2">
+      {round ? <><Button variant="outline" className="h-11 px-3" disabled={busy} onClick={startRound}><Shuffle size={15}/>{t('换一轮')}</Button><Button variant="ghost" className="h-11 px-3" aria-label={t('返回题库')} title={t('返回题库')} disabled={busy} onClick={leaveRound}><ArrowLeft size={16}/><span className="hidden sm:inline">{t('返回题库')}</span></Button></> : <><Button variant="outline" className="h-11 px-3" disabled={busy || !data?.setId} onClick={() => { setModal('import'); setPreview(null); }}><Import size={15}/>{t('导入')}</Button><Button variant="ghost" className="h-11 px-3" disabled={busy || !data} onClick={() => { setSetName(''); setModal('manage'); }}><Settings2 size={15}/><span className="hidden sm:inline">{t('管理')}</span><span className="sr-only sm:hidden">{t('管理')}</span></Button></>}
     </div></header>
     {error && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{t(error)}</div>}
-    {notice && <p role="status" className="text-sm text-muted-foreground">{t(notice)}</p>}
-    {!data ? <Card><CardContent className="space-y-3 p-5 !pt-5"><p>{t('加载中…')}</p>{error && <Button variant="outline" onClick={() => void load().then(() => setError('')).catch(value => setError(value.message))}>{t('重试')}</Button>}</CardContent></Card> : <>
-      {!!data.sets.length && <div className="flex flex-wrap gap-3"><label className="flex min-w-0 flex-1 items-center gap-3 text-sm"><span className="shrink-0">{t('练习集')}</span><select aria-label={t('练习集')} className={`${selectStyle} w-full max-w-md`} value={data.setId} disabled={busy} onChange={event => { setUndo(null); setFilter('all'); setSearch(''); setCategoryId(''); void load(event.target.value).catch(value => setError(value.message)); }}>{data.sets.map(set => <option key={set.id} value={set.id}>{set.name}</option>)}</select></label>
-      <Button disabled={busy || !activeGroups.length} className="min-h-11" onClick={() => editItem()}><Plus size={16}/>{t('新增题目')}</Button></div>}
-      {!data.sets.length ? <Card><CardContent className="space-y-4 p-6 !pt-6"><h2 className="font-semibold">{t('创建第一个练习集')}</h2><p className="text-sm text-muted-foreground">{t('分类、题目和回答要点都可以自由编辑。')}</p><form className="flex flex-wrap gap-2" onSubmit={async event => { event.preventDefault(); await mutate({ action: 'set', name: setName }); }}><Input className="min-w-0 flex-1" aria-label={t('练习集名称')} placeholder={t('练习集名称')} value={setName} maxLength={100} onChange={event => setSetName(event.target.value)} required/><Button disabled={busy}>{t('创建')}</Button></form></CardContent></Card> : <>
-        <Card><CardContent className="space-y-4 p-5 !pt-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="font-medium">{t('今日练习')}</h2><p className="mt-1 text-sm text-muted-foreground">{t('学习日 {0} · 日本时间 04:00 更新', data.day)}</p></div><div className="shrink-0 text-right"><span className="text-2xl font-semibold tabular-nums">{stats.practiced}<span className="text-base font-normal text-muted-foreground"> / {stats.total}</span></span><p className="text-sm text-muted-foreground">{t('今日共 {0} 次', stats.attempts)}</p></div></div>
-          <progress aria-label={t('今日进度')} className="h-2 w-full overflow-hidden rounded-full accent-slate-900" max={stats.total || 1} value={stats.practiced}/>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">{ratings.map(value => { const Icon = symbols[value]; return <span key={value} className={`inline-flex items-center gap-1 ${color[value]}`}><Icon size={13}/>{t(ratingLabels[value])} {stats[value]}</span>; })}<span className="text-muted-foreground">{t('未评级')} {stats.unrated}</span></div>
-        </CardContent></Card>
-        <div className="space-y-3"><Input aria-label={t('搜索题目和要点')} placeholder={t('搜索题目和要点')} value={search} onChange={event => setSearch(event.target.value)}/><div className="flex flex-wrap gap-2"><select aria-label={t('筛选大分类')} className={`${selectStyle} min-w-0 flex-1`} value={selectedCategory} onChange={event => setCategoryId(event.target.value)}><option value="">{t('全部分类')}</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><Button variant={round ? 'outline' : 'default'} className="min-h-11" disabled={busy || !activeItems.length} onClick={() => { setRound(startPracticeRound(activeItems, data.setId, data.day)); setNotice('已开始一轮：不会优先，同档随机。'); }}><Shuffle size={16}/>{t(round ? '换一轮' : '开始练习')}</Button>{round && <Button variant="ghost" className="min-h-11" disabled={busy} onClick={() => { setRound(null); setNotice('已返回题库，恢复原始顺序。'); }}>{t('返回题库')}</Button>}</div><div className="flex flex-wrap gap-2" role="group" aria-label={t('筛选')}>
-          {([['all', '全部'], ['unpracticed', '今天没练'], ['unknown', '不会'], ['shaky', '卡顿'], ['fluent', '流畅'], ['unrated', '未评级'], ['starred', '星标']] as [Filter, string][]).map(([key, label]) => <Button key={key} size="sm" className="min-h-11" variant={filter === key ? 'secondary' : 'ghost'} aria-pressed={filter === key} onClick={() => setFilter(key)}>{t(label)}</Button>)}
-        </div></div>
-        {!activeItems.length && <Card><CardContent className="space-y-3 p-6 !pt-6"><p>{t('还没有题目，导入内容即可开始。')}</p><Button onClick={() => setModal('import')}><Import size={16}/>{t('导入')}</Button><p className="text-sm text-muted-foreground">{t('也可以在管理中创建分类，再手动添加题目。')}</p></CardContent></Card>}
-        {!!activeItems.length && !visible.length && <p className="py-8 text-center text-muted-foreground">{t('没有符合条件的题目。')}</p>}
-        {!!visible.length && <details open className="group rounded-lg border bg-card"><summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 font-semibold"><ChevronDown size={16}/><span className="min-w-0 flex-1 break-words">{t(round ? '本轮题目' : '题库内容')}</span><span className="text-sm font-normal text-muted-foreground">{visible.length}</span></summary><p className="border-t px-4 py-3 text-xs leading-5 text-muted-foreground">{t(round ? '不会优先，同档随机；本轮已评的题移到后面。' : '题库保持分类与原始顺序。点“开始练习”进入随机练习。')}</p><div className="divide-y border-t">
-          {visible.map(item => <article key={item.id} className="space-y-3 p-4"><div className="flex items-start gap-2"><label className="flex min-h-11 min-w-11 cursor-pointer items-center justify-center"><Checkbox aria-label={t('今日练过：{0}', item.prompt)} checked={item.today_count > 0} disabled={busy} onChange={() => item.today_count ? openHistory(item.id) : record(item, 'check')}/></label><div className="min-w-0 flex-1"><p className="break-words text-xs text-muted-foreground">{activeGroups.find(group => group.id === item.group_id)?.name}{round?.completed.includes(item.id) && ` · ${t('本轮已评')}`}</p><button type="button" className="min-h-11 w-full whitespace-pre-wrap break-words text-left text-sm font-medium leading-6 hover:underline" onClick={() => openHistory(item.id)}>{item.prompt}</button><p className="text-xs leading-5 text-muted-foreground">{t('今日 {0} 次', item.today_count)} · {item.current_rating ? t('上次评级：{0} · {1}', t(ratingLabels[item.current_rating]), item.last_rated_at ? dateTime(item.last_rated_at) : '') : t('未评级')}</p></div><Button variant="ghost" className="h-11 w-11 shrink-0 p-0" disabled={busy} aria-label={t('星标：{0}', item.prompt)} aria-pressed={!!item.starred} onClick={() => void mutate({ ...itemBody(item), starred: !item.starred })}><Star size={17} className={item.starred ? 'fill-amber-400 text-amber-600' : 'text-muted-foreground'}/></Button></div>
-            <PracticeProgress item={item}/>
-            {!!item.outline && <details className="ml-1 rounded-md bg-muted/40 px-3 py-2"><summary className="cursor-pointer text-sm text-muted-foreground">{t('回答要点')}</summary><div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7">{item.outline}</div></details>}
-            <div className="flex flex-wrap items-center gap-2"><div className="grid w-full min-w-0 flex-none grid-cols-3 gap-2 sm:w-auto sm:flex-1" role="group" aria-label={t('本次评级：{0}', item.prompt)}>{ratings.map(value => { const Icon = symbols[value]; return <Button key={value} variant={item.latest_rating === value ? 'secondary' : 'outline'} className={`min-h-11 min-w-0 gap-1 whitespace-nowrap px-2 ${color[value]}`} disabled={busy} aria-pressed={item.latest_rating === value} onClick={() => record(item, 'rate', value)}><Icon size={14}/>{t(ratingLabels[value])}</Button>; })}</div>{item.today_count > 0 && <Button variant="outline" className="min-h-11 px-3" disabled={busy} onClick={() => record(item, 'again')}><Plus size={15}/>{t('再练一次')}</Button>}</div>
-            {!item.latest_rating && <p className="text-xs text-muted-foreground">{t('本次未评级')}</p>}
-          </article>)}
-        </div></details>}
-      </>}
+    {notice && <p role="status" className="text-xs text-muted-foreground">{t(notice)}</p>}
+    {!data ? <Card><CardContent className="space-y-3 p-5 !pt-5"><p>{t('加载中…')}</p>{error && <Button variant="outline" onClick={() => void load().then(() => setError('')).catch(value => setError(value.message))}>{t('重试')}</Button>}</CardContent></Card> : !data.sets.length ?
+      <Card><CardContent className="space-y-4 p-6 !pt-6"><h2 className="font-semibold">{t('创建第一个练习集')}</h2><p className="text-sm text-muted-foreground">{t('分类、题目和回答要点都可以自由编辑。')}</p><form className="flex gap-2" onSubmit={async event => { event.preventDefault(); await mutate({ action: 'set', name: setName }); }}><Input className="min-w-0 flex-1" aria-label={t('练习集名称')} placeholder={t('练习集名称')} value={setName} maxLength={100} onChange={event => setSetName(event.target.value)} required/><Button disabled={busy}>{t('创建')}</Button></form></CardContent></Card> : round ?
+      <PracticeRoundView key={round.order.join('|')} items={orderedPracticeItems(contentItems, round)} groups={activeGroups} round={round} onNewRound={startRound} {...actions}/> : <>
+      <div className="flex gap-2"><select aria-label={t('练习集')} className={`${selectStyle} min-w-0 flex-1 sm:max-w-md`} value={data.setId} disabled={busy} onChange={event => { setUndo(null); setFilter('all'); setSearch(''); setCategoryId(''); void load(event.target.value).catch(value => setError(value.message)); }}>{data.sets.map(set => <option key={set.id} value={set.id}>{set.name}</option>)}</select><Button variant="outline" aria-label={t('新增题目')} className="h-11 px-3" disabled={busy || !activeGroups.length} onClick={() => editItem()}><Plus size={16}/><span className="hidden sm:inline">{t('新增题目')}</span></Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-sm"><div className="flex items-center gap-3"><span className="font-medium">{t('今日练习')} <span className="tabular-nums">{stats.practiced}/{stats.total}</span></span><span className="text-xs text-muted-foreground">{t('今日共 {0} 次', stats.attempts)}</span></div><span className="hidden text-xs text-muted-foreground sm:inline">{t('学习日 {0} · 日本时间 04:00 更新', data.day)}</span></div>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_8rem_auto]"><Input className="col-span-2 h-11 lg:col-span-1" aria-label={t('搜索题目和要点')} placeholder={t('搜索题目和要点')} value={search} onChange={event => setSearch(event.target.value)}/><select aria-label={t('筛选大分类')} className={selectStyle} value={selectedCategory} onChange={event => setCategoryId(event.target.value)}><option value="">{t('全部分类')}</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><select aria-label={t('筛选')} className={selectStyle} value={filter} onChange={event => setFilter(event.target.value as Filter)}>{([['all', '全部'], ['unpracticed', '今天没练'], ['unknown', '不会'], ['shaky', '卡顿'], ['fluent', '流畅'], ['unrated', '未评级'], ['starred', '星标']] as [Filter, string][]).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select><Button className="col-span-2 h-11 lg:col-span-1" disabled={busy || !visible.length} onClick={startRound}><Shuffle size={16}/>{t('开始练习')}</Button></div>
+      {!activeItems.length ? <div className="space-y-3 rounded-lg border p-6 text-center"><p className="text-sm text-muted-foreground">{t('还没有题目，导入内容即可开始。')}</p><Button onClick={() => setModal('import')}><Import size={15}/>{t('导入')}</Button></div> : !visible.length ? <p className="py-8 text-center text-sm text-muted-foreground">{t('没有符合条件的题目。')}</p> : <PracticeBank items={visible} groups={activeGroups} {...actions}/>}
     </>}
 
     {undo && <div role="status" className="fixed bottom-5 left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg border bg-background p-3 shadow-lg"><span className="text-sm">{t('已记录，可撤销本次操作。')}</span><Button variant="outline" disabled={busy} onClick={() => void mutate({ action: 'attempt', ...undo }, { undoing: true })}><RotateCcw size={15}/>{t('撤销')}</Button></div>}

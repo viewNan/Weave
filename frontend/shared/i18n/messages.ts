@@ -1,6 +1,14 @@
 export type Language = 'en' | 'zh-CN';
 
 export const messages: Readonly<Record<string, string>> = {
+  "练习模式": "Practice mode",
+  "练习次数": "Attempts",
+  "本次评级": "Rate attempt",
+  "本轮已评 {0} / {1}": "Rated this round: {0} / {1}",
+  "剩余 {0} 题": "{0} questions left",
+  "本轮练习完成": "Round complete",
+  "本轮题目都已评价，可以休息或换一轮。": "All questions in this round are rated. Take a break or start another round.",
+  "评级后自动进入下一题。": "Rating advances to the next question.",
   "流畅进度": "Fluent progress",
   "目标达成": "Goal reached",
   "待复习": "Review needed",
