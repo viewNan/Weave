@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import test from 'node:test';
-import { fluentProgress, normalized, orderedPracticeItems, PracticeError, practicePriority, refreshPracticeRound, startPracticeRound, statistics, studyDay, nextStudyDayDelay, type PracticeItem, type Rating } from '../features/practice/domain.ts';
+import { fluentProgress, normalized, orderedPracticeItems, PracticeError, practicePriority, questionCode, refreshPracticeRound, startPracticeRound, statistics, studyDay, nextStudyDayDelay, type PracticeItem, type Rating } from '../features/practice/domain.ts';
 import { parseImport } from '../features/practice/import-format.ts';
+import { exportMarkdown } from '../features/practice/export.ts';
 import { PracticeService, type PracticeDatabase, type Statement } from '../features/practice/service.ts';
 import { requireSameOrigin } from '../features/recipes/server/auth.ts';
 
@@ -19,7 +20,7 @@ class SqlStatement implements Statement {
 }
 class TestDatabase implements PracticeDatabase {
   raw = new DatabaseSync(':memory:');
-  constructor() { this.raw.exec('PRAGMA foreign_keys=ON'); this.raw.exec(readFileSync(new URL('../migrations/0013_practice.sql', import.meta.url), 'utf8')); }
+  constructor(numbers = true) { this.raw.exec('PRAGMA foreign_keys=ON'); this.raw.exec(readFileSync(new URL('../migrations/0013_practice.sql', import.meta.url), 'utf8')); if (numbers) this.raw.exec(readFileSync(new URL('../migrations/0014_practice_question_numbers.sql', import.meta.url), 'utf8')); }
   prepare(sql: string) { return new SqlStatement(this.raw, sql); }
   async batch(statements: Statement[]) {
     this.raw.exec('BEGIN');
@@ -261,4 +262,93 @@ test('a round stays stable across refreshes; only rated items move behind remain
   assert.deepEqual(refreshPracticeRound(completed, changed.slice(1), 'set', round.day).completed, []);
   assert.deepEqual(refreshPracticeRound(completed, changed, 'other', round.day).completed, []);
   assert.deepEqual(refreshPracticeRound(completed, changed, 'set', '2026-11-28').completed, []);
+});
+
+test('question numbers backfill old data without changing UUIDs/history and remain stable after migration retries', async t => {
+  const db = new TestDatabase(false); t.after(() => db.raw.close());
+  db.raw.exec(`INSERT INTO practice_sets VALUES ('s','Old','2026-01-01');
+    INSERT INTO practice_groups (id,set_id,name,name_key) VALUES ('g','s','G','G');
+    INSERT INTO practice_items (id,group_id,prompt,prompt_key,sort_order) VALUES ('b','g','B','B',1),('a','g','A','A',0);
+    INSERT INTO practice_attempts (id,item_id,rating,study_day,created_at) VALUES ('history','a','shaky','2026-11-27','2026-11-27T03:00:00Z');`);
+  const oldItems = db.raw.prepare('SELECT * FROM practice_items ORDER BY id').all(), oldHistory = db.raw.prepare('SELECT * FROM practice_attempts').all();
+  const migration = readFileSync(new URL('../migrations/0014_practice_question_numbers.sql', import.meta.url), 'utf8');
+  db.raw.exec(migration);
+  const numbers = db.raw.prepare('SELECT * FROM practice_question_numbers ORDER BY number').all();
+  assert.deepEqual(numbers.map(row => row.item_id), ['a', 'b']);
+  db.raw.exec(migration);
+  assert.deepEqual(db.raw.prepare('SELECT * FROM practice_question_numbers ORDER BY number').all(), numbers);
+  assert.deepEqual(db.raw.prepare('SELECT * FROM practice_items ORDER BY id').all(), oldItems);
+  assert.deepEqual(db.raw.prepare('SELECT * FROM practice_attempts').all(), oldHistory);
+  db.raw.exec("DELETE FROM practice_items WHERE id='b'; INSERT INTO practice_items (id,group_id,prompt,prompt_key) VALUES ('c','g','C','C');");
+  const next = db.raw.prepare("SELECT number FROM practice_question_numbers WHERE item_id='c'").get()!;
+  assert.ok(Number(next.number) > Number(numbers[1].number));
+  assert.equal(questionCode({ question_number: 1 }), 'Q0001');
+  assert.equal(questionCode({ question_number: 10000 }), 'Q10000');
+});
+
+test('numbers are global, survive edits/archives/reordering and duplicate imports do not allocate new codes', async t => {
+  const { service, setId, fresh, db } = await fixture(t);
+  const before = await fresh(), code = questionCode(before);
+  await service.saveItem({ id: before.id, revision: before.revision, groupId: before.group_id, prompt: 'Renamed', outline: before.outline, sortOrder: 100, archived: true });
+  let item = (await service.dashboard(setId)).items.find(item => item.id === before.id)!;
+  assert.equal(questionCode(item), code);
+  const allocated = db.raw.prepare('SELECT * FROM practice_question_numbers ORDER BY number').all();
+  await service.importContent(setId, material, false);
+  const repeated = await service.exportSnapshot(setId);
+  assert.equal(repeated.items.find(item => item.id === before.id)?.question_number, before.question_number);
+  // The renamed original remains archived; only its old prompt may be imported as a new identity.
+  const allNumbers = repeated.items.map(item => item.question_number);
+  assert.equal(new Set(allNumbers).size, allNumbers.length);
+  assert.ok(allNumbers.every(number => Number.isSafeInteger(number) && number > 0));
+  const secondSet = String((await service.saveSet({ name: 'Second' })).id);
+  await service.importContent(secondSet, '# A\nQ: Another question', false);
+  const second = (await service.dashboard(secondSet)).items[0];
+  assert.ok(second.question_number > Math.max(...allocated.map(row => Number(row.number))));
+  const noChange = db.raw.prepare('SELECT * FROM practice_question_numbers ORDER BY number').all();
+  await service.importContent(secondSet, '# A\nQ: Another question', false);
+  assert.deepEqual(db.raw.prepare('SELECT * FROM practice_question_numbers ORDER BY number').all(), noChange);
+});
+
+test('export includes archived content, deleted/unrated history, Unicode notes and a consistent readable score', async t => {
+  const { service, record, fresh, setId } = await fixture(t);
+  await record('rate', 'fluent'); await record('again'); await record('rate', 'fluent');
+  const current = await fresh(), history = await service.history(current.id);
+  const note = '日本語 😀\n```json\n# preserve this\n```';
+  await service.changeAttempt({ itemId: current.id, attemptId: history[0].id, revision: current.revision, note, deleted: 1 });
+  await record('again');
+  const group = (await service.dashboard(setId)).groups.find(group => group.id === current.group_id)!;
+  await service.saveGroup({ id: group.id, name: group.name, archived: true });
+  const snapshot = await service.exportSnapshot(setId), output = exportMarkdown(snapshot);
+  assert.equal(snapshot.items.length, 3); assert.equal(snapshot.groups.find(value => value.id === group.id)?.archived, 1);
+  assert.equal(snapshot.attempts.length, 3); assert.equal(snapshot.attempts.find(value => value.id === history[0].id)?.note, note);
+  assert.equal(snapshot.attempts.find(value => value.id === history[0].id)?.deleted, 1);
+  assert.ok(output.includes(`#### ${questionCode(snapshot.items.find(item => item.id === current.id)!)}（已归档）`));
+  assert.ok(output.includes('统计：共练 2 次；流畅 1 次；卡顿 0 次；不会 0 次；未评级 1 次。'));
+  assert.ok(output.includes('流畅进度 10/100'));
+  assert.ok(output.includes('另有 1 条已删除记录'));
+  assert.ok(output.includes(JSON.stringify(note)));
+  assert.ok(output.includes('"study_day"')); assert.ok(output.includes('"sequence"')); assert.ok(output.includes('"revision"'));
+  assert.ok(output.includes('"numbering_last_allocated"'));
+  const again = await service.exportSnapshot(setId);
+  assert.deepEqual(again.attempts, snapshot.attempts); assert.deepEqual(again.items, snapshot.items);
+});
+
+test('export scopes are isolated, empty exports work, and Markdown fences preserve arbitrary outlines', async t => {
+  const { service, setId } = await fixture(t);
+  const extra = String((await service.saveSet({ name: 'Other [bank]' })).id);
+  const outline = 'First\n\n  Indented\n```text\n# Literal heading\n```\nA: Q: - More';
+  await service.importContent(extra, `# X\nQ: Literal\nA:\nFirst\n\n  Indented\n\\\x60\x60\x60text\n\\# Literal heading\n\\\x60\x60\x60\n\\A: Q: - More`, false);
+  const current = await service.exportSnapshot(setId), all = await service.exportSnapshot();
+  assert.equal(current.sets.length, 1); assert.equal(current.items.length, 3);
+  assert.equal(all.sets.length, 2); assert.equal(all.items.length, 4);
+  const item = all.items.find(item => item.prompt === 'Literal')!;
+  assert.equal(item.outline, outline);
+  const markdown = exportMarkdown(all);
+  assert.ok(markdown.includes('````text\n' + outline + '\n````'));
+  assert.equal((markdown.match(/^#### Q\d+/gm) ?? []).length, 4);
+  assert.ok(markdown.includes('Other \\[bank\\]'));
+  await assert.rejects(service.exportSnapshot('missing'), (error: unknown) => error instanceof PracticeError && error.status === 404);
+  const empty = String((await service.saveSet({ name: 'Empty' })).id);
+  assert.equal((await service.exportSnapshot(empty)).items.length, 0);
+  assert.ok(exportMarkdown(await service.exportSnapshot(empty)).includes('0 道题'));
 });

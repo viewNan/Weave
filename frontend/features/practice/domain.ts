@@ -7,7 +7,7 @@ export type PracticeSet = { id: string; name: string };
 export type PracticeGroup = { id: string; set_id: string; name: string; archived: number; sort_order: number };
 export type Attempt = { id: string; item_id: string; rating: Rating | null; note: string; study_day: string; created_at: string; deleted: number };
 export type PracticeItem = {
-  id: string; group_id: string; prompt: string; outline: string; starred: number; archived: number;
+  id: string; question_number: number; group_id: string; prompt: string; outline: string; starred: number; archived: number;
   sort_order: number; revision: number; today_count: number; current_rating: Rating | null;
   latest_id: string | null; latest_rating: Rating | null; last_rated_at: string | null;
   total_count: number; fluent_count: number; shaky_count: number; unknown_count: number;
@@ -15,6 +15,8 @@ export type PracticeItem = {
 export type Dashboard = { sets: PracticeSet[]; setId: string; groups: PracticeGroup[]; items: PracticeItem[]; day: string };
 export type Undo = { itemId: string; attemptId: string; revision: number; rating?: Rating | null; deleted?: number; note?: string };
 export type PracticeRound = { setId: string; day: string; order: string[]; completed: string[] };
+
+export function questionCode(item: Pick<PracticeItem, 'question_number'>) { return `Q${String(item.question_number).padStart(4, '0')}`; }
 
 export function fluentProgress(item: Pick<PracticeItem, 'fluent_count' | 'current_rating'>) {
   const score = Math.min(PASS_SCORE, item.fluent_count * FLUENT_POINTS);

@@ -1,5 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
-import { PracticeError } from '../../../../features/practice/domain';
+import { identifier, PracticeError } from '../../../../features/practice/domain';
 import { PracticeService, type PracticeDatabase } from '../../../../features/practice/service';
 import { requireSameOrigin } from '../../../../features/recipes/server/auth';
 import { RecipeError } from '../../../../features/recipes/domain';
@@ -21,6 +21,11 @@ function failure(error: unknown) {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url), current = await service(), itemId = url.searchParams.get('itemId');
+    const exportScope = url.searchParams.get('export');
+    if (exportScope !== null) {
+      if (exportScope !== 'current' && exportScope !== 'all') throw new PracticeError('导出范围无效。');
+      return Response.json(await current.exportSnapshot(exportScope === 'current' ? identifier(url.searchParams.get('setId')) : undefined), { headers });
+    }
     return Response.json(itemId ? { attempts: await current.history(itemId) } : await current.dashboard(url.searchParams.get('setId') || undefined), { headers });
   } catch (error) { return failure(error); }
 }

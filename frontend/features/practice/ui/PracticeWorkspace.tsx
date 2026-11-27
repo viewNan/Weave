@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, ChevronDown, Circle, Import, Pencil, Plus, RotateCcw, Settings2, Shuffle, Star, Trash2, Triangle, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Circle, Download, Import, Pencil, Plus, RotateCcw, Settings2, Shuffle, Star, Trash2, Triangle, X } from 'lucide-react';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
 import { Checkbox } from '../../../components/ui/checkbox';
@@ -9,7 +9,8 @@ import { Dialog } from '../../../components/ui/dialog';
 import { Input } from '../../../components/ui/input';
 import { Textarea } from '../../../components/ui/textarea';
 import { useLanguage } from '../../../shared/i18n/LanguageProvider';
-import { fluentProgress, nextStudyDayDelay, orderedPracticeItems, ratingLabels, ratings, refreshPracticeRound, startPracticeRound, statistics, type Attempt, type Dashboard, type PracticeGroup, type PracticeItem, type PracticeRound, type Rating, type Undo } from '../domain';
+import { fluentProgress, nextStudyDayDelay, orderedPracticeItems, questionCode, ratingLabels, ratings, refreshPracticeRound, startPracticeRound, statistics, type Attempt, type Dashboard, type PracticeGroup, type PracticeItem, type PracticeRound, type Rating, type Undo } from '../domain';
+import { exportMarkdown, type PracticeExportSnapshot } from '../export';
 import { importInstructions, parseImport, type ImportResult } from '../import-format';
 import { PracticeBank, PracticeRoundView } from './PracticeViews';
 
@@ -34,8 +35,11 @@ export default function PracticeWorkspace() {
   const [busy, setBusy] = useState(false), lock = useRef(false), selectedSet = useRef(''), loadVersion = useRef(0);
   const [filter, setFilter] = useState<Filter>('all'), [search, setSearch] = useState(''), [undo, setUndo] = useState<UndoState | null>(null);
   const [round, setRound] = useState<PracticeRound | null>(null), [categoryId, setCategoryId] = useState('');
-  const [modal, setModal] = useState<'import' | 'manage' | null>(null), [editor, setEditor] = useState<Editor | null>(null);
+  const [modal, setModal] = useState<'import' | 'manage' | 'export' | null>(null), [editor, setEditor] = useState<Editor | null>(null);
+  const [exportScope, setExportScope] = useState<'current' | 'all'>('current'), [exportText, setExportText] = useState(''), [exportLoading, setExportLoading] = useState(false);
+  const [exportSummary, setExportSummary] = useState<{ sets: number; items: number; attempts: number } | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null), [attempts, setAttempts] = useState<Attempt[] | null>(null);
+  const [outlineId, setOutlineId] = useState<string | null>(null);
   const [source, setSource] = useState(''), [preview, setPreview] = useState<Preview | null>(null);
   const [setName, setSetName] = useState(''), [groupName, setGroupName] = useState('');
   const workspaceRef = useRef<HTMLElement>(null);
@@ -78,6 +82,15 @@ export default function PracticeWorkspace() {
       .catch(value => { if (active) setError(value.message); });
     return () => { active = false; };
   }, [historyId]);
+  useEffect(() => {
+    if (modal !== 'export') return;
+    let active = true; setExportText(''); setExportSummary(null); setExportLoading(true); setError('');
+    void request<PracticeExportSnapshot>(`${endpoint}?export=${exportScope}${exportScope === 'current' ? `&setId=${encodeURIComponent(data?.setId ?? '')}` : ''}`)
+      .then(snapshot => { if (active) { setExportText(exportMarkdown(snapshot)); setExportSummary({ sets: snapshot.sets.length, items: snapshot.items.length, attempts: snapshot.attempts.length }); } })
+      .catch(value => { if (active) setError(value.message); })
+      .finally(() => { if (active) setExportLoading(false); });
+    return () => { active = false; };
+  }, [modal, exportScope, data?.setId]);
 
   async function mutate(body: Record<string, unknown>, options: { setId?: string; close?: boolean; undoing?: boolean } = {}) {
     if (lock.current) return false;
@@ -107,9 +120,10 @@ export default function PracticeWorkspace() {
   const stats = statistics(activeItems);
   const selectedCategory = activeGroups.some(group => group.id === categoryId) ? categoryId : '';
   const contentItems = activeGroups.flatMap(group => activeItems.filter(item => item.group_id === group.id));
-  const visible = orderedPracticeItems(contentItems, round).filter(item => (!selectedCategory || item.group_id === selectedCategory) && (!search || `${item.prompt}\n${item.outline}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) &&
+  const visible = orderedPracticeItems(contentItems, round).filter(item => (!selectedCategory || item.group_id === selectedCategory) && (!search || `${questionCode(item)}\n${item.prompt}\n${item.outline}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) &&
     (filter === 'all' || filter === 'starred' && !!item.starred || filter === 'unpracticed' && !item.today_count || filter === 'unrated' && !item.current_rating || item.current_rating === filter));
   const historyItem = data?.items.find(item => item.id === historyId);
+  const outlineItem = data?.items.find(item => item.id === outlineId);
   const parsed = useMemo(() => parseImport(source), [source]);
   const dateTime = (value: string) => new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
   async function record(item: PracticeItem, mode: 'check' | 'rate' | 'again', rating?: Rating) {
@@ -148,7 +162,7 @@ export default function PracticeWorkspace() {
   }
   const dialog = (title: string, onClose: () => void, children: React.ReactNode) => <Dialog title={title} closeLabel={t('关闭')} onClose={() => { if (!busy) onClose(); }}>{error && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{t(error)}</p>}{notice === '已复制。' && <p role="status" className="text-sm text-muted-foreground">{t(notice)}</p>}{children}</Dialog>;
 
-  const actions = { busy, onRecord: record, onHistory: openHistory, onStar: (item: PracticeItem) => { void mutate({ ...itemBody(item), starred: !item.starred }); } };
+  const actions = { busy, onRecord: record, onHistory: openHistory, onOutline: setOutlineId, onStar: (item: PracticeItem) => { void mutate({ ...itemBody(item), starred: !item.starred }); } };
   function startRound() {
     if (!data) return;
     setRound(startPracticeRound(activeItems, data.setId, data.day));
@@ -159,10 +173,16 @@ export default function PracticeWorkspace() {
     setRound(null); setNotice('');
     requestAnimationFrame(() => workspaceRef.current?.closest('main')?.scrollTo({ top: 0 }));
   }
+  function downloadExport() {
+    const url = URL.createObjectURL(new Blob(['\uFEFF', exportText], { type: 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a'); link.href = url; link.download = `weave-practice-${exportScope}-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 
   return <section ref={workspaceRef} className="mx-auto w-full max-w-6xl space-y-4 p-4 pb-24 sm:p-6 sm:pb-24">
     <header className="flex items-center justify-between gap-3"><div className="min-w-0"><h1 className="m-0 text-xl font-semibold tracking-tight sm:text-2xl">{t(round ? '练习模式' : '练习清单')}</h1><p className="mt-1 hidden text-sm text-muted-foreground sm:block">{round ? data?.sets.find(set => set.id === data.setId)?.name : t('记录每次练习，看见掌握的变化。')}</p></div><div className="flex shrink-0 gap-2">
-      {round ? <><Button variant="outline" className="h-11 px-3" disabled={busy} onClick={startRound}><Shuffle size={15}/>{t('换一轮')}</Button><Button variant="ghost" className="h-11 px-3" aria-label={t('返回题库')} title={t('返回题库')} disabled={busy} onClick={leaveRound}><ArrowLeft size={16}/><span className="hidden sm:inline">{t('返回题库')}</span></Button></> : <><Button variant="outline" className="h-11 px-3" disabled={busy || !data?.setId} onClick={() => { setModal('import'); setPreview(null); }}><Import size={15}/>{t('导入')}</Button><Button variant="ghost" className="h-11 px-3" disabled={busy || !data} onClick={() => { setSetName(''); setModal('manage'); }}><Settings2 size={15}/><span className="hidden sm:inline">{t('管理')}</span><span className="sr-only sm:hidden">{t('管理')}</span></Button></>}
+      {round ? <><Button variant="outline" className="h-11 px-3" disabled={busy} onClick={startRound}><Shuffle size={15}/>{t('换一轮')}</Button><Button variant="ghost" className="h-11 px-3" aria-label={t('返回题库')} title={t('返回题库')} disabled={busy} onClick={leaveRound}><ArrowLeft size={16}/><span className="hidden sm:inline">{t('返回题库')}</span></Button></> : <><Button variant="outline" className="h-11 px-3" disabled={busy || !data?.setId} onClick={() => { setModal('import'); setPreview(null); }}><Import size={15}/>{t('导入')}</Button><Button variant="outline" className="h-11 px-3" aria-label={t('导出')} title={t('导出')} disabled={busy || !data?.setId} onClick={() => { setNotice(''); setModal('export'); }}><Download size={15}/><span className="hidden sm:inline">{t('导出')}</span></Button><Button variant="ghost" className="h-11 px-3" disabled={busy || !data} onClick={() => { setSetName(''); setModal('manage'); }}><Settings2 size={15}/><span className="hidden sm:inline">{t('管理')}</span><span className="sr-only sm:hidden">{t('管理')}</span></Button></>}
     </div></header>
     {error && <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{t(error)}</div>}
     {notice && <p role="status" className="text-xs text-muted-foreground">{t(notice)}</p>}
@@ -171,11 +191,22 @@ export default function PracticeWorkspace() {
       <PracticeRoundView key={round.order.join('|')} items={orderedPracticeItems(contentItems, round)} groups={activeGroups} round={round} onNewRound={startRound} {...actions}/> : <>
       <div className="flex gap-2"><select aria-label={t('练习集')} className={`${selectStyle} min-w-0 flex-1 sm:max-w-md`} value={data.setId} disabled={busy} onChange={event => { setUndo(null); setFilter('all'); setSearch(''); setCategoryId(''); void load(event.target.value).catch(value => setError(value.message)); }}>{data.sets.map(set => <option key={set.id} value={set.id}>{set.name}</option>)}</select><Button variant="outline" aria-label={t('新增题目')} className="h-11 px-3" disabled={busy || !activeGroups.length} onClick={() => editItem()}><Plus size={16}/><span className="hidden sm:inline">{t('新增题目')}</span></Button></div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border bg-card px-4 py-3 text-sm"><div className="flex items-center gap-3"><span className="font-medium">{t('今日练习')} <span className="tabular-nums">{stats.practiced}/{stats.total}</span></span><span className="text-xs text-muted-foreground">{t('今日共 {0} 次', stats.attempts)}</span></div><span className="hidden text-xs text-muted-foreground sm:inline">{t('学习日 {0} · 日本时间 04:00 更新', data.day)}</span></div>
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_8rem_auto]"><Input className="col-span-2 h-11 lg:col-span-1" aria-label={t('搜索题目和要点')} placeholder={t('搜索题目和要点')} value={search} onChange={event => setSearch(event.target.value)}/><select aria-label={t('筛选大分类')} className={selectStyle} value={selectedCategory} onChange={event => setCategoryId(event.target.value)}><option value="">{t('全部分类')}</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><select aria-label={t('筛选')} className={selectStyle} value={filter} onChange={event => setFilter(event.target.value as Filter)}>{([['all', '全部'], ['unpracticed', '今天没练'], ['unknown', '不会'], ['shaky', '卡顿'], ['fluent', '流畅'], ['unrated', '未评级'], ['starred', '星标']] as [Filter, string][]).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select><Button className="col-span-2 h-11 lg:col-span-1" disabled={busy || !visible.length} onClick={startRound}><Shuffle size={16}/>{t('开始练习')}</Button></div>
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,1fr)_10rem_8rem_auto]"><Input className="col-span-2 h-11 lg:col-span-1" aria-label={t('搜索编号、题目或要点')} placeholder={t('搜索编号、题目或要点')} value={search} onChange={event => setSearch(event.target.value)}/><select aria-label={t('筛选大分类')} className={selectStyle} value={selectedCategory} onChange={event => setCategoryId(event.target.value)}><option value="">{t('全部分类')}</option>{activeGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select><select aria-label={t('筛选')} className={selectStyle} value={filter} onChange={event => setFilter(event.target.value as Filter)}>{([['all', '全部'], ['unpracticed', '今天没练'], ['unknown', '不会'], ['shaky', '卡顿'], ['fluent', '流畅'], ['unrated', '未评级'], ['starred', '星标']] as [Filter, string][]).map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}</select><Button className="col-span-2 h-11 lg:col-span-1" disabled={busy || !visible.length} onClick={startRound}><Shuffle size={16}/>{t('开始练习')}</Button></div>
       {!activeItems.length ? <div className="space-y-3 rounded-lg border p-6 text-center"><p className="text-sm text-muted-foreground">{t('还没有题目，导入内容即可开始。')}</p><Button onClick={() => setModal('import')}><Import size={15}/>{t('导入')}</Button></div> : !visible.length ? <p className="py-8 text-center text-sm text-muted-foreground">{t('没有符合条件的题目。')}</p> : <PracticeBank items={visible} groups={activeGroups} {...actions}/>}
     </>}
 
     {undo && <div role="status" className="fixed bottom-5 left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg border bg-background p-3 shadow-lg"><span className="text-sm">{t('已记录，可撤销本次操作。')}</span><Button variant="outline" disabled={busy} onClick={() => void mutate({ action: 'attempt', ...undo }, { undoing: true })}><RotateCcw size={15}/>{t('撤销')}</Button></div>}
+
+    {outlineItem && <Dialog title={t('回答要点')} closeLabel={t('关闭')} size="sm" onClose={() => setOutlineId(null)}><p className="font-mono text-xs text-muted-foreground">{questionCode(outlineItem)}</p><h3 className="whitespace-pre-wrap break-words text-sm font-medium leading-6">{outlineItem.prompt}</h3><div className="whitespace-pre-wrap break-words border-t pt-4 text-sm leading-7">{outlineItem.outline}</div></Dialog>}
+
+    {modal === 'export' && dialog(t('导出题库与练习数据'), () => setModal(null), <>
+      <label className="block space-y-2 text-sm"><span>{t('导出范围')}</span><select className={`${selectStyle} w-full`} value={exportScope} onChange={event => setExportScope(event.target.value as 'current' | 'all')}><option value="current">{t('当前题库（含归档与全部历史）')}</option><option value="all">{t('全部题库（含归档与全部历史）')}</option></select></label>
+      <p className="text-xs leading-5 text-muted-foreground">{t('固定编号便于 AI 对应题目。导出包含要点、统计、逐次评级与备注，以及已删除记录的标记。')}</p>
+      {exportSummary && <p className="text-sm">{t('已汇总 {0} 个题库、{1} 道题、{2} 条记录。', exportSummary.sets, exportSummary.items, exportSummary.attempts)}</p>}
+      <label className="block space-y-2 text-sm"><span>{t('可复制的 Markdown 文本')}</span><Textarea readOnly className="h-[42dvh] min-h-48 font-mono text-xs" value={exportText} placeholder={exportLoading ? t('正在汇总数据…') : ''}/></label>
+      <p className="text-xs text-muted-foreground">{t('本文件供阅读和 AI 整理使用，不能直接导入以恢复全部历史。')}</p>
+      <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" disabled={exportLoading || !exportText} onClick={() => { void navigator.clipboard.writeText(exportText).then(() => setNotice('已复制。')).catch(() => setError('复制失败，请手动选择文本。')); }}>{t('复制全部')}</Button><Button disabled={exportLoading || !exportText} onClick={downloadExport}><Download size={15}/>{t('下载 Markdown')}</Button></div>
+    </>)}
 
     {modal === 'import' && data && dialog(t('导入练习内容'), () => setModal(null), <>
       <p className="text-sm text-muted-foreground">{t('只导入大分类、题目和整块回答要点，不改变练习历史。')}</p>
@@ -198,6 +229,7 @@ export default function PracticeWorkspace() {
     </form>)}
 
     {historyItem && dialog(t('练习详情'), () => setHistoryId(null), <>
+      <p className="font-mono text-xs text-muted-foreground">{questionCode(historyItem)}</p>
       <div className="flex items-start justify-between gap-3"><h3 className="min-w-0 whitespace-pre-wrap break-words font-medium">{historyItem.prompt}</h3><Button variant="outline" className="shrink-0" disabled={busy} onClick={() => { setHistoryId(null); editItem(historyItem); }}><Pencil size={14}/>{t('编辑')}</Button></div>
       {!!historyItem.outline && <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm">{t('回答要点')}</summary><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-7">{historyItem.outline}</p></details>}
       <PracticeProgress item={historyItem} expanded/>

@@ -1,5 +1,6 @@
 import { identifier, normalized, PracticeError, rating, revision, studyDay, text, type Attempt, type Dashboard, type PracticeGroup, type PracticeItem, type PracticeSet, type Undo } from './domain.ts';
 import { parseImport } from './import-format.ts';
+import type { PracticeExportSnapshot } from './export.ts';
 
 export type Statement = {
   bind(...values: unknown[]): Statement;
@@ -21,7 +22,7 @@ export class PracticeService {
     const setId = requested || sets[0]?.id || '', day = studyDay(this.clock());
     if (setId && !sets.some(set => set.id === setId)) throw new PracticeError('找不到练习集。', 404);
     const groups = (await this.sql('SELECT * FROM practice_groups WHERE set_id=? ORDER BY sort_order,id', setId).all<PracticeGroup>()).results;
-    const items = (await this.sql(`SELECT i.*,
+    const items = (await this.sql(`SELECT i.*,n.number question_number,
       COALESCE(c.total_count,0) total_count,COALESCE(c.fluent_count,0) fluent_count,
       COALESCE(c.shaky_count,0) shaky_count,COALESCE(c.unknown_count,0) unknown_count,
       (SELECT COUNT(*) FROM practice_attempts a WHERE a.item_id=i.id AND a.study_day=? AND a.deleted=0) today_count,
@@ -30,6 +31,7 @@ export class PracticeService {
       (SELECT a.rating FROM practice_attempts a WHERE a.item_id=i.id AND a.deleted=0 AND a.rating IS NOT NULL ORDER BY a.sequence DESC LIMIT 1) current_rating,
       (SELECT a.created_at FROM practice_attempts a WHERE a.item_id=i.id AND a.deleted=0 AND a.rating IS NOT NULL ORDER BY a.sequence DESC LIMIT 1) last_rated_at
       FROM practice_items i JOIN practice_groups g ON g.id=i.group_id
+      JOIN practice_question_numbers n ON n.item_id=i.id
       LEFT JOIN (SELECT item_id,COUNT(*) total_count,
         SUM(CASE WHEN rating='fluent' THEN 1 ELSE 0 END) fluent_count,
         SUM(CASE WHEN rating='shaky' THEN 1 ELSE 0 END) shaky_count,
@@ -41,6 +43,28 @@ export class PracticeService {
   async history(itemId: string) {
     await this.item(itemId);
     return (await this.sql('SELECT * FROM practice_attempts WHERE item_id=? ORDER BY sequence DESC', itemId).all<Attempt>()).results;
+  }
+  async exportSnapshot(setId?: string): Promise<PracticeExportSnapshot> {
+    const scope = setId ?? null;
+    // One read statement gives content and attempts from the same database snapshot.
+    const row = await this.sql(`SELECT
+      (SELECT json_group_array(json_object('id',id,'name',name,'created_at',created_at))
+        FROM (SELECT * FROM practice_sets WHERE (? IS NULL OR id=?) ORDER BY created_at,id)) sets_json,
+      (SELECT json_group_array(json_object('id',id,'set_id',set_id,'name',name,'name_key',name_key,'sort_order',sort_order,'archived',archived))
+        FROM (SELECT * FROM practice_groups WHERE (? IS NULL OR set_id=?) ORDER BY set_id,sort_order,id)) groups_json,
+      (SELECT json_group_array(json_object('id',id,'question_number',question_number,'group_id',group_id,'prompt',prompt,'prompt_key',prompt_key,'outline',outline,'sort_order',sort_order,'starred',starred,'archived',archived,'revision',revision))
+        FROM (SELECT i.*,n.number question_number FROM practice_items i JOIN practice_question_numbers n ON n.item_id=i.id
+          JOIN practice_groups g ON g.id=i.group_id WHERE (? IS NULL OR g.set_id=?) ORDER BY n.number)) items_json,
+      (SELECT json_group_array(json_object('id',id,'sequence',sequence,'item_id',item_id,'rating',rating,'note',note,'study_day',study_day,'created_at',created_at,'deleted',deleted))
+        FROM (SELECT a.* FROM practice_attempts a JOIN practice_items i ON i.id=a.item_id
+          JOIN practice_groups g ON g.id=i.group_id WHERE (? IS NULL OR g.set_id=?) ORDER BY a.sequence)) attempts_json,
+      COALESCE((SELECT seq FROM sqlite_sequence WHERE name='practice_question_numbers'),0) numbering_last_allocated`,
+      scope, scope, scope, scope, scope, scope, scope, scope).first<{ sets_json: string; groups_json: string; items_json: string; attempts_json: string; numbering_last_allocated: number }>();
+    if (!row) throw new PracticeError('数据服务暂不可用，请稍后重试。', 503);
+    const sets = JSON.parse(row.sets_json);
+    if (setId && !sets.length) throw new PracticeError('找不到练习集。', 404);
+    return { schema_version: 1, exported_at: this.clock().toISOString(), scope: setId ? 'current' : 'all', timezone: 'Asia/Tokyo', study_day_boundary: '04:00',
+      numbering_last_allocated: row.numbering_last_allocated, sets, groups: JSON.parse(row.groups_json), items: JSON.parse(row.items_json), attempts: JSON.parse(row.attempts_json) };
   }
   private async item(id: string) {
     const item = await this.sql('SELECT * FROM practice_items WHERE id=?', id).first<PracticeItem>();

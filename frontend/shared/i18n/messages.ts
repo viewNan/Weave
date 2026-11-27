@@ -1,6 +1,23 @@
 export type Language = 'en' | 'zh-CN';
 
 export const messages: Readonly<Record<string, string>> = {
+  "要点": "Outline",
+  "暂无要点": "No outline yet",
+  "查看要点：{0}": "View outline: {0}",
+  "导出": "Export",
+  "导出题库与练习数据": "Export questions and practice data",
+  "导出范围": "Export scope",
+  "当前题库（含归档与全部历史）": "Current bank (including archives and all history)",
+  "全部题库（含归档与全部历史）": "All banks (including archives and all history)",
+  "固定编号便于 AI 对应题目。导出包含要点、统计、逐次评级与备注，以及已删除记录的标记。": "Stable question codes help AI match questions. Includes outlines, counts, ratings, notes and deleted-record flags.",
+  "已汇总 {0} 个题库、{1} 道题、{2} 条记录。": "Collected {0} banks, {1} questions and {2} attempts.",
+  "可复制的 Markdown 文本": "Copyable Markdown text",
+  "正在汇总数据…": "Collecting data…",
+  "本文件供阅读和 AI 整理使用，不能直接导入以恢复全部历史。": "For reading and AI assistance. This file cannot be imported directly to restore all history.",
+  "复制全部": "Copy all",
+  "下载 Markdown": "Download Markdown",
+  "导出范围无效。": "Invalid export scope.",
+  "搜索编号、题目或要点": "Search code, question or outline",
   "练习模式": "Practice mode",
   "练习次数": "Attempts",
   "本次评级": "Rate attempt",

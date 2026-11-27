@@ -13,7 +13,8 @@ category order; only an explicitly started practice round is shuffled.
 
 ## Storage and release
 
-Apply `frontend/migrations/0013_practice.sql` to the existing D1 database before
+Apply `frontend/migrations/0013_practice.sql` and then
+`frontend/migrations/0014_practice_question_numbers.sql` to the existing D1 database before
 releasing this feature. For local development, from `frontend`:
 
 ```sh
@@ -102,3 +103,23 @@ rollback, duplicate imports, archive conflicts, revision conflicts, history,
 undo, 04:00 boundaries and existing same-origin validation. Run `npm run
 typecheck` and `npm run build` before release. Local tests do not prove a remote
 migration or Cloudflare Access policy has been applied.
+
+## 固定编号与完整导出
+
+每题有全题库唯一的固定编号（Q0001、Q0002……），用于给 AI 对应题目。
+编号与排序无关，编辑、随机练习、移动分类和归档都不会改变编号。
+0014 迁移按现有题库/分类顺序分配首批编号，新题由数据库触发器分配；
+保留历史编号映射，即使以后永久删除题目，也不复用编号。UUID 仍是内部标识。
+
+顶部“导出”可选择当前或全部题库，一次显示可复制的整合文字，也可下载
+UTF-8 Markdown。包括分类、题目、要点、编号、UUID、星标、顺序、归档、
+逐次练习评级、备注、时间、学习日及删除标记；统计和分数按有效历史重新计算。
+导出使用一次数据库查询读取一致快照，接口禁止缓存，不会发送给外部 AI。
+
+保留逐次记录可以在以后修改加分和排序规则时重新计算。仅有累计次数无法
+重建练习顺序、时间或备注；从未保存的信息以及评级纠正前的旧值无法恢复。
+导出 Markdown 适合阅读、保存及给 AI 整理，不是现有内容导入格式，目前
+没有一键恢复全部历史的功能。实际数据和本地测试数据都不得提交到 Git。
+
+题库主页保持明确的分类标题。每行的“要点”按钮直接弹出小窗口，手机无需
+先展开题目；练习卡片也可直接查看要点。星标使用22px图标和44px点击区域。
