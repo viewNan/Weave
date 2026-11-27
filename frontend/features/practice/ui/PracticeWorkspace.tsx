@@ -39,7 +39,6 @@ export default function PracticeWorkspace() {
   const [exportScope, setExportScope] = useState<'current' | 'all'>('current'), [exportText, setExportText] = useState(''), [exportLoading, setExportLoading] = useState(false);
   const [exportSummary, setExportSummary] = useState<{ sets: number; items: number; attempts: number } | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null), [attempts, setAttempts] = useState<Attempt[] | null>(null);
-  const [outlineId, setOutlineId] = useState<string | null>(null);
   const [source, setSource] = useState(''), [preview, setPreview] = useState<Preview | null>(null);
   const [setName, setSetName] = useState(''), [groupName, setGroupName] = useState('');
   const workspaceRef = useRef<HTMLElement>(null);
@@ -123,7 +122,6 @@ export default function PracticeWorkspace() {
   const visible = orderedPracticeItems(contentItems, round).filter(item => (!selectedCategory || item.group_id === selectedCategory) && (!search || `${questionCode(item)}\n${item.prompt}\n${item.outline}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())) &&
     (filter === 'all' || filter === 'starred' && !!item.starred || filter === 'unpracticed' && !item.today_count || filter === 'unrated' && !item.current_rating || item.current_rating === filter));
   const historyItem = data?.items.find(item => item.id === historyId);
-  const outlineItem = data?.items.find(item => item.id === outlineId);
   const parsed = useMemo(() => parseImport(source), [source]);
   const dateTime = (value: string) => new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
   async function record(item: PracticeItem, mode: 'check' | 'rate' | 'again', rating?: Rating) {
@@ -162,7 +160,7 @@ export default function PracticeWorkspace() {
   }
   const dialog = (title: string, onClose: () => void, children: React.ReactNode) => <Dialog title={title} closeLabel={t('关闭')} onClose={() => { if (!busy) onClose(); }}>{error && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{t(error)}</p>}{notice === '已复制。' && <p role="status" className="text-sm text-muted-foreground">{t(notice)}</p>}{children}</Dialog>;
 
-  const actions = { busy, onRecord: record, onHistory: openHistory, onOutline: setOutlineId, onStar: (item: PracticeItem) => { void mutate({ ...itemBody(item), starred: !item.starred }); } };
+  const actions = { busy, onRecord: record, onHistory: openHistory, onStar: (item: PracticeItem) => { void mutate({ ...itemBody(item), starred: !item.starred }); } };
   function startRound() {
     if (!data) return;
     setRound(startPracticeRound(activeItems, data.setId, data.day));
@@ -197,7 +195,6 @@ export default function PracticeWorkspace() {
 
     {undo && <div role="status" className="fixed bottom-5 left-4 right-4 z-30 mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg border bg-background p-3 shadow-lg"><span className="text-sm">{t('已记录，可撤销本次操作。')}</span><Button variant="outline" disabled={busy} onClick={() => void mutate({ action: 'attempt', ...undo }, { undoing: true })}><RotateCcw size={15}/>{t('撤销')}</Button></div>}
 
-    {outlineItem && <Dialog title={t('回答要点')} closeLabel={t('关闭')} size="sm" onClose={() => setOutlineId(null)}><p className="font-mono text-xs text-muted-foreground">{questionCode(outlineItem)}</p><h3 className="whitespace-pre-wrap break-words text-sm font-medium leading-6">{outlineItem.prompt}</h3><div className="whitespace-pre-wrap break-words border-t pt-4 text-sm leading-7">{outlineItem.outline}</div></Dialog>}
 
     {modal === 'export' && dialog(t('导出题库与练习数据'), () => setModal(null), <>
       <label className="block space-y-2 text-sm"><span>{t('导出范围')}</span><select className={`${selectStyle} w-full`} value={exportScope} onChange={event => setExportScope(event.target.value as 'current' | 'all')}><option value="current">{t('当前题库（含归档与全部历史）')}</option><option value="all">{t('全部题库（含归档与全部历史）')}</option></select></label>
